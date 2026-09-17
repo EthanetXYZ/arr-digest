@@ -1,5 +1,6 @@
 import os from "node:os";
 import type { FastifyInstance } from "fastify";
+import { sqlite } from "../db/client.js";
 
 function detectLanAddresses(): string[] {
   const results: string[] = [];
@@ -14,6 +15,16 @@ function detectLanAddresses(): string[] {
 }
 
 export async function systemRoutes(app: FastifyInstance) {
+  app.get("/api/health", async (_req, reply) => {
+    try {
+      sqlite.prepare("SELECT 1").get();
+      return { status: "ok", uptime: process.uptime() };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      return reply.code(503).send({ status: "error", error });
+    }
+  });
+
   app.get("/api/system/network-info", async (req) => {
     // Best-effort candidates for the "reachable from other containers/hosts"
     // address — the browser's own origin is often just "localhost".

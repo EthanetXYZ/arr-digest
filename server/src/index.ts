@@ -1,12 +1,14 @@
 import { bootstrapDb } from "./db/bootstrap.js";
 import { buildApp } from "./app.js";
 import { rescheduleDigest } from "./digest/scheduler.js";
+import { scheduleMaintenance } from "./maintenance.js";
 
 async function main() {
   bootstrapDb();
 
   const app = await buildApp();
   rescheduleDigest();
+  scheduleMaintenance();
 
   const port = Number(process.env.PORT) || 8080;
   const host = process.env.HOST ?? "0.0.0.0";

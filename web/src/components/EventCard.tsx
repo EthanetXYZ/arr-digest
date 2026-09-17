@@ -21,19 +21,48 @@ function episodeCode(e: MediaEvent): string | null {
   return `S${String(e.seasonNumber).padStart(2, "0")}E${String(e.episodeNumber).padStart(2, "0")}`;
 }
 
-export function EventCard({ event }: { event: MediaEvent }) {
-  const style = KIND_STYLES[event.kind];
-  const code = episodeCode(event);
+function seasonRange(events: MediaEvent[]): string {
+  const season = `S${String(events[0].seasonNumber).padStart(2, "0")}`;
+  const episodeNumbers = events
+    .map((e) => e.episodeNumber)
+    .filter((n): n is number => n != null)
+    .sort((a, b) => a - b);
+  const range =
+    episodeNumbers.length > 1
+      ? `E${String(episodeNumbers[0]).padStart(2, "0")}–E${String(episodeNumbers[episodeNumbers.length - 1]).padStart(2, "0")}`
+      : episodeNumbers.length === 1
+        ? `E${String(episodeNumbers[0]).padStart(2, "0")}`
+        : "";
+  return `${season}${range} (${events.length} episodes)`;
+}
+
+export function EventCard({ events }: { events: MediaEvent[] }) {
+  const first = events[0];
+  const style = KIND_STYLES[first.kind];
+  const isBatch = events.length > 1;
+  const mostRecent = Math.max(...events.map((e) => e.occurredAt));
+
+  const code = isBatch ? seasonRange(events) : episodeCode(first);
+
+  const consistentQuality = isBatch
+    ? first.kind === "upgrade"
+      ? events.every((e) => e.previousQuality === first.previousQuality && e.quality === first.quality)
+        ? { from: first.previousQuality, to: first.quality }
+        : null
+      : events.every((e) => e.quality === first.quality)
+        ? { from: null, to: first.quality }
+        : null
+    : first.kind === "upgrade" && first.previousQuality && first.quality
+      ? { from: first.previousQuality, to: first.quality }
+      : first.quality
+        ? { from: null, to: first.quality }
+        : null;
 
   return (
-    <div
-      className={`flex gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3 ${
-        event.digested ? "opacity-50" : ""
-      }`}
-    >
-      {event.posterUrl ? (
+    <div className="flex gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+      {first.posterUrl ? (
         <img
-          src={event.posterUrl}
+          src={first.posterUrl}
           alt=""
           className="h-16 w-11 flex-none rounded object-cover bg-slate-800"
           loading="lazy"
@@ -47,34 +76,32 @@ export function EventCard({ event }: { event: MediaEvent }) {
           <span className={`rounded border px-1.5 py-0.5 text-xs font-medium ${style.badge}`}>
             {style.label}
           </span>
-          <span className="text-xs uppercase tracking-wide text-slate-500">
-            {event.source}
-          </span>
-          <span className="ml-auto text-xs text-slate-500">{timeAgo(event.occurredAt)}</span>
+          <span className="text-xs uppercase tracking-wide text-slate-500">{first.source}</span>
+          <span className="ml-auto text-xs text-slate-500">{timeAgo(mostRecent)}</span>
         </div>
 
         <div className="mt-1 truncate font-medium text-slate-100">
-          {event.title}
-          {event.year ? <span className="text-slate-400"> ({event.year})</span> : null}
+          {first.title}
+          {first.year ? <span className="text-slate-400"> ({first.year})</span> : null}
         </div>
 
-        {(code || event.episodeTitle) && (
+        {(code || (!isBatch && first.episodeTitle)) && (
           <div className="truncate text-sm text-slate-400">
             {code}
-            {code && event.episodeTitle ? " — " : ""}
-            {event.episodeTitle ? `"${event.episodeTitle}"` : null}
+            {code && !isBatch && first.episodeTitle ? " — " : ""}
+            {!isBatch && first.episodeTitle ? `"${first.episodeTitle}"` : null}
           </div>
         )}
 
         <div className="mt-1 text-sm">
-          {event.kind === "upgrade" && event.previousQuality && event.quality ? (
+          {consistentQuality?.from ? (
             <span className="text-slate-400">
-              <span className="text-slate-500 line-through">{event.previousQuality}</span>
+              <span className="text-slate-500 line-through">{consistentQuality.from}</span>
               {" → "}
-              <span className="text-slate-200">{event.quality}</span>
+              <span className="text-slate-200">{consistentQuality.to}</span>
             </span>
-          ) : event.quality ? (
-            <span className="text-slate-400">{event.quality}</span>
+          ) : consistentQuality?.to ? (
+            <span className="text-slate-400">{consistentQuality.to}</span>
           ) : null}
         </div>
       </div>
