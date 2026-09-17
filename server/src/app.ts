@@ -30,11 +30,12 @@ export async function buildApp() {
   await app.register(eventsRoutes);
   await app.register(systemRoutes);
 
+  // wildcard defaults to true: it serves files via live per-request lookups
+  // rather than pre-globbing the directory once at startup, so a rebuild
+  // (new content-hashed filenames) is picked up immediately without needing
+  // to restart the server process.
   const webDist = process.env.WEB_DIST ?? path.join(process.cwd(), "..", "web", "dist");
-  await app.register(fastifyStatic, {
-    root: webDist,
-    wildcard: false,
-  });
+  await app.register(fastifyStatic, { root: webDist });
   app.setNotFoundHandler((req, reply) => {
     if (req.raw.method === "GET" && !req.url.startsWith("/api")) {
       return reply.sendFile("index.html");

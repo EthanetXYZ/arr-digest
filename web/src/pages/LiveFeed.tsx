@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLiveEvents } from "../hooks/useLiveEvents";
+import { useLiveEventsContext } from "../context/LiveEventsContext";
 import { EventCard } from "../components/EventCard";
 import { api } from "../api";
 import type { EventKind } from "../types";
@@ -12,7 +12,7 @@ const FILTERS: { key: EventKind | "all"; label: string }[] = [
 ];
 
 export function LiveFeed() {
-  const { events, status, lastDigest } = useLiveEvents();
+  const { events, status, lastDigest } = useLiveEventsContext();
   const [filter, setFilter] = useState<EventKind | "all">("all");
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<string | null>(null);
