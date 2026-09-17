@@ -7,7 +7,7 @@ import { settingsRoutes } from "./api/settings.routes.js";
 import { eventsRoutes } from "./api/events.routes.js";
 import { systemRoutes } from "./api/system.routes.js";
 import { registerClient } from "./realtime/ws.js";
-import { getRecentEvents } from "./webhooks/events-service.js";
+import { getPendingDigestEvents } from "./webhooks/events-service.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -17,7 +17,11 @@ export async function buildApp() {
   app.register(async (instance) => {
     instance.get("/api/ws", { websocket: true }, (socket) => {
       registerClient(socket);
-      socket.send(JSON.stringify({ type: "backlog", events: getRecentEvents(50) }));
+      // Newest first, matching how new "event" broadcasts get prepended —
+      // and only what's still pending, since already-digested items would
+      // just pile up as noise in a feed meant to show what's coming next.
+      const backlog = getPendingDigestEvents().slice().reverse();
+      socket.send(JSON.stringify({ type: "backlog", events: backlog }));
     });
   });
 

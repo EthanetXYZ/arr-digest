@@ -42,6 +42,24 @@ export interface NetworkInfo {
   port: string | null;
 }
 
+export interface DiscordEmbed {
+  title?: string;
+  description?: string;
+  color?: number;
+  thumbnail?: { url: string };
+  footer?: { text: string };
+}
+
+export interface DiscordMessage {
+  content?: string;
+  embeds: DiscordEmbed[];
+}
+
+export type PreviewOverrides = Pick<
+  Settings,
+  "digestTitle" | "groupByType" | "showPoster" | "compactMode" | "mentionContent"
+>;
+
 export interface DigestRun {
   id: number;
   ranAt: number;
@@ -53,5 +71,5 @@ export interface DigestRun {
 export type WsMessage =
   | { type: "backlog"; events: MediaEvent[] }
   | { type: "event"; event: MediaEvent }
-  | { type: "digest_sent"; eventCount: number; ranAt: number }
+  | { type: "digest_sent"; eventCount: number; ranAt: number; eventIds: number[] }
   | { type: "digest_error"; error: string; ranAt: number };

@@ -17,7 +17,10 @@ export function LiveFeed() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<string | null>(null);
 
-  const pendingCount = useMemo(() => events.filter((e) => !e.digested).length, [events]);
+  // Everything in `events` is inherently still pending — already-digested
+  // items are dropped from state entirely (see useLiveEvents) rather than
+  // just dimmed, so the feed doesn't pile up with old, already-sent items.
+  const pendingCount = events.length;
   const filtered = useMemo(
     () => (filter === "all" ? events : events.filter((e) => e.kind === filter)),
     [events, filter],
@@ -60,7 +63,8 @@ export function LiveFeed() {
 
         <button
           onClick={sendNow}
-          disabled={sending}
+          disabled={sending || pendingCount === 0}
+          title={pendingCount === 0 ? "Nothing queued for a digest yet" : undefined}
           className="ml-auto rounded-md bg-upgrade px-3 py-1.5 text-sm font-medium text-white transition hover:bg-upgrade/80 disabled:opacity-50"
         >
           {sending ? "Sending…" : "Send digest now"}

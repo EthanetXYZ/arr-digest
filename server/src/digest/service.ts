@@ -1,19 +1,45 @@
 import { desc } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { digestRuns } from "../db/schema.js";
-import { getSettings } from "../config/settings.js";
+import { getSettings, type Settings } from "../config/settings.js";
 import {
   getPendingDigestEvents,
   markEventsDigested,
 } from "../webhooks/events-service.js";
-import { buildDigestMessages, type DigestEvent } from "./builder.js";
+import { buildDigestMessages, type DigestEvent, type DiscordMessage } from "./builder.js";
 import { sendDiscordMessages } from "./discord.js";
+import { getSampleEvents } from "./sample-data.js";
 import { broadcast } from "../realtime/ws.js";
 
-export function previewDigest(): { events: DigestEvent[]; messages: ReturnType<typeof buildDigestMessages> } {
-  const settings = getSettings();
-  const events = getPendingDigestEvents() as unknown as DigestEvent[];
+// Only the fields that affect how a message is rendered — a live preview
+// applies these over the saved settings without persisting them, so it can
+// reflect edits the user hasn't hit Save on yet.
+export interface PreviewOverrides {
+  digestTitle?: string;
+  groupByType?: boolean;
+  showPoster?: boolean;
+  compactMode?: boolean;
+  mentionContent?: string | null;
+}
+
+export function renderPreview(
+  overrides: PreviewOverrides,
+  useSample: boolean,
+): { events: DigestEvent[]; messages: DiscordMessage[] } {
+  const settings: Settings = { ...getSettings(), ...overrides };
+  const events = useSample
+    ? getSampleEvents()
+    : (getPendingDigestEvents() as unknown as DigestEvent[]);
   return { events, messages: buildDigestMessages(events, settings) };
+}
+
+export async function sendTestDigest(overrides: PreviewOverrides): Promise<void> {
+  const settings: Settings = { ...getSettings(), ...overrides };
+  if (!settings.discordWebhookUrl) {
+    throw new Error("No Discord webhook URL configured");
+  }
+  const messages = buildDigestMessages(getSampleEvents(), settings);
+  await sendDiscordMessages(settings.discordWebhookUrl, messages);
 }
 
 export async function runDigest(): Promise<void> {
@@ -47,11 +73,12 @@ export async function runDigest(): Promise<void> {
       messages.push({ content, embeds: [] });
     }
     await sendDiscordMessages(settings.discordWebhookUrl, messages);
-    markEventsDigested(events.map((e) => e.id));
+    const eventIds = events.map((e) => e.id);
+    markEventsDigested(eventIds);
     db.insert(digestRuns)
       .values({ ranAt, eventCount: events.length, status: "sent" })
       .run();
-    broadcast({ type: "digest_sent", eventCount: events.length, ranAt });
+    broadcast({ type: "digest_sent", eventCount: events.length, ranAt, eventIds });
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     db.insert(digestRuns).values({ ranAt, eventCount: events.length, status: "error", error }).run();

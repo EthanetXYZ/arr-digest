@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { DigestRun, NetworkInfo, Settings as SettingsType } from "../types";
+import { DiscordPreview } from "../components/DiscordPreview";
+import type { DigestRun, DiscordMessage, NetworkInfo, PreviewOverrides, Settings as SettingsType } from "../types";
 
 function useTimezones(): string[] {
   let zones: string[];
@@ -103,6 +104,10 @@ export function Settings() {
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [preview, setPreview] = useState<DiscordMessage[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
   const timezones = useTimezones();
 
   useEffect(() => {
@@ -110,6 +115,35 @@ export function Settings() {
     api.getDigestHistory().then(setHistory);
     api.getNetworkInfo().then(setNetworkInfo).catch(() => {});
   }, []);
+
+  // Live preview reflects unsaved edits (title, grouping, compact/poster
+  // toggles, mention) against fixed sample data, debounced so typing in the
+  // Title field doesn't fire a request per keystroke.
+  useEffect(() => {
+    if (!settings) return;
+    const overrides: PreviewOverrides = {
+      digestTitle: settings.digestTitle,
+      groupByType: settings.groupByType,
+      showPoster: settings.showPoster,
+      compactMode: settings.compactMode,
+      mentionContent: settings.mentionContent,
+    };
+    setPreviewLoading(true);
+    const timer = setTimeout(() => {
+      api
+        .renderDigestPreview(overrides, true)
+        .then((res) => setPreview(res.messages))
+        .catch(() => {})
+        .finally(() => setPreviewLoading(false));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [
+    settings?.digestTitle,
+    settings?.groupByType,
+    settings?.showPoster,
+    settings?.compactMode,
+    settings?.mentionContent,
+  ]);
 
   if (!settings) {
     return <div className="mx-auto max-w-2xl px-4 py-6 text-slate-400">Loading…</div>;
@@ -130,6 +164,26 @@ export function Settings() {
       setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function sendTest() {
+    if (!settings) return;
+    setSendingTest(true);
+    setTestResult(null);
+    try {
+      const res = await api.sendTestDigest({
+        digestTitle: settings.digestTitle,
+        groupByType: settings.groupByType,
+        showPoster: settings.showPoster,
+        compactMode: settings.compactMode,
+        mentionContent: settings.mentionContent,
+      });
+      setTestResult(res.ok ? "Sent — check your Discord channel." : (res.error ?? "Failed to send."));
+    } catch (err) {
+      setTestResult(err instanceof Error ? err.message : "Failed to send.");
+    } finally {
+      setSendingTest(false);
     }
   }
 
@@ -307,6 +361,36 @@ export function Settings() {
           checked={settings.skipIfEmpty}
           onChange={(v) => patch({ skipIfEmpty: v })}
         />
+      </section>
+
+      <section className="mb-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Preview</h2>
+            <p className="text-xs text-slate-500">
+              Live mockup using sample data — updates as you edit settings above, even before you save.
+            </p>
+          </div>
+          {previewLoading && <span className="text-xs text-slate-500">Updating…</span>}
+        </div>
+
+        <DiscordPreview messages={preview} />
+
+        <div className="mt-4 flex items-center gap-3 border-t border-slate-800 pt-4">
+          <button
+            onClick={sendTest}
+            disabled={sendingTest || !settings.discordWebhookUrl}
+            title={settings.discordWebhookUrl ? undefined : "Set a Discord webhook URL first"}
+            className="rounded-md bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+          >
+            {sendingTest ? "Sending…" : "Send test digest to Discord"}
+          </button>
+          {testResult && <span className="text-sm text-slate-400">{testResult}</span>}
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Posts the same sample data shown above to your real Discord channel using the settings above
+          (saved or not) — doesn't touch your pending events or digest history.
+        </p>
       </section>
 
       <div className="mb-8 flex items-center gap-3">

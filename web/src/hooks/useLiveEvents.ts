@@ -32,7 +32,11 @@ export function useLiveEvents(maxItems = 200) {
           setEvents((prev) => [msg.event, ...prev].slice(0, maxItems));
         } else if (msg.type === "digest_sent") {
           setLastDigest({ eventCount: msg.eventCount, ranAt: msg.ranAt });
-          setEvents((prev) => prev.map((e) => ({ ...e, digested: true })));
+          // Drop exactly the items this digest included, not everything —
+          // an event that arrived mid-send (after the digest snapshot its
+          // pending list) isn't part of it and should stay visible.
+          const sentIds = new Set(msg.eventIds);
+          setEvents((prev) => prev.filter((e) => !sentIds.has(e.id)));
         }
       };
 

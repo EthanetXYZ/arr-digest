@@ -1,4 +1,11 @@
-import type { DigestRun, MediaEvent, NetworkInfo, Settings } from "./types";
+import type {
+  DigestRun,
+  DiscordMessage,
+  MediaEvent,
+  NetworkInfo,
+  PreviewOverrides,
+  Settings,
+} from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -27,4 +34,14 @@ export const api = {
   getDigestHistory: () => request<DigestRun[]>("/api/digest/history"),
   runDigestNow: () => request<{ ok: boolean; error?: string }>("/api/digest/run-now", { method: "POST" }),
   getNetworkInfo: () => request<NetworkInfo>("/api/system/network-info"),
+  renderDigestPreview: (settings: PreviewOverrides, sample = true) =>
+    request<{ messages: DiscordMessage[] }>("/api/digest/render", {
+      method: "POST",
+      body: JSON.stringify({ settings, sample }),
+    }),
+  sendTestDigest: (settings: PreviewOverrides) =>
+    request<{ ok: boolean; error?: string }>("/api/digest/send-test", {
+      method: "POST",
+      body: JSON.stringify({ settings }),
+    }),
 };

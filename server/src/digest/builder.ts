@@ -64,6 +64,84 @@ function formatLine(e: DigestEvent): string {
   return `• ${parts.join(" — ")}`;
 }
 
+type DisplayUnit = { events: DigestEvent[] };
+
+// Multiple episodes of the same show + season + kind (e.g. a whole season
+// pack landing at once) are collapsed into one unit instead of one line/embed
+// per episode — otherwise a season premiere blows past Discord's embed limits.
+function groupIntoDisplayUnits(events: DigestEvent[]): DisplayUnit[] {
+  const seasonGroups = new Map<string, DigestEvent[]>();
+  const order: string[] = [];
+  const singles: DigestEvent[] = [];
+
+  for (const e of events) {
+    if (e.mediaType === "series" && e.seasonNumber != null) {
+      const key = `${e.kind}|${e.title}|${e.year}|${e.seasonNumber}`;
+      if (!seasonGroups.has(key)) {
+        seasonGroups.set(key, []);
+        order.push(key);
+      }
+      seasonGroups.get(key)!.push(e);
+    } else {
+      singles.push(e);
+    }
+  }
+
+  const units: DisplayUnit[] = order.map((key) => ({ events: seasonGroups.get(key)! }));
+  for (const e of singles) units.push({ events: [e] });
+  return units;
+}
+
+function seasonSummaryText(events: DigestEvent[]): string {
+  const first = events[0];
+  const season = `S${String(first.seasonNumber).padStart(2, "0")}`;
+  const episodeNumbers = events
+    .map((e) => e.episodeNumber)
+    .filter((n): n is number => n != null)
+    .sort((a, b) => a - b);
+
+  const range =
+    episodeNumbers.length > 1
+      ? `E${String(episodeNumbers[0]).padStart(2, "0")}–E${String(episodeNumbers[episodeNumbers.length - 1]).padStart(2, "0")}`
+      : episodeNumbers.length === 1
+        ? `E${String(episodeNumbers[0]).padStart(2, "0")}`
+        : "";
+
+  return `${season}${range} (${events.length} episodes)`;
+}
+
+// Quality is only shown for a consolidated season when every episode in it
+// agrees — a mixed-quality batch is more confusing to summarize than to omit.
+function consistentQuality(events: DigestEvent[]): { from: string | null; to: string } | null {
+  const first = events[0];
+  if (!first.quality) return null;
+
+  if (first.kind === "upgrade") {
+    const consistent = events.every(
+      (e) => e.previousQuality === first.previousQuality && e.quality === first.quality,
+    );
+    return consistent && first.previousQuality ? { from: first.previousQuality, to: first.quality } : null;
+  }
+
+  const consistent = events.every((e) => e.quality === first.quality);
+  return consistent ? { from: null, to: first.quality } : null;
+}
+
+function formatSeasonLine(events: DigestEvent[]): string {
+  const first = events[0];
+  const parts: string[] = [
+    `**${first.title}**${first.year ? ` (${first.year})` : ""}`,
+    seasonSummaryText(events),
+  ];
+
+  const quality = consistentQuality(events);
+  if (quality) {
+    parts.push(quality.from ? `\`${quality.from} → ${quality.to}\`` : `\`${quality.to}\``);
+  }
+
+  return `• ${parts.join(" — ")}`;
+}
+
 function groupKey(e: DigestEvent, groupByType: boolean): string {
   return groupByType ? `${e.kind}:${e.mediaType}` : e.kind;
 }
@@ -91,10 +169,11 @@ function buildCompactEmbeds(
       const items = groups.get(key);
       if (!items?.length) continue;
 
-      const lines = items.map(formatLine);
+      const units = groupIntoDisplayUnits(items);
+      const lines = units.map((u) => (u.events.length > 1 ? formatSeasonLine(u.events) : formatLine(u.events[0])));
       let description = lines.join("\n");
       if (description.length > 3900) {
-        description = lines.slice(0, 40).join("\n") + `\n… and ${items.length - 40} more`;
+        description = lines.slice(0, 40).join("\n") + `\n… and ${lines.length - 40} more`;
       }
 
       const title = settings.groupByType
@@ -111,6 +190,48 @@ function buildCompactEmbeds(
   return embeds;
 }
 
+function buildUnitEmbed(events: DigestEvent[], settings: Settings): DiscordEmbed {
+  const first = events[0];
+
+  if (events.length > 1) {
+    const descParts = [seasonSummaryText(events)];
+    const quality = consistentQuality(events);
+    if (quality) {
+      descParts.push(quality.from ? `${quality.from} → ${quality.to}` : quality.to);
+    }
+
+    const embed: DiscordEmbed = {
+      title: `${KIND_LABEL[first.kind]}: ${first.title}${first.year ? ` (${first.year})` : ""}`,
+      description: descParts.join("\n"),
+      color: COLORS[first.kind as keyof typeof COLORS],
+      footer: { text: "Sonarr" },
+    };
+    if (settings.showPoster && first.posterUrl) embed.thumbnail = { url: first.posterUrl };
+    return embed;
+  }
+
+  const e = first;
+  const code = episodeCode(e);
+  const descParts: string[] = [];
+  if (code) descParts.push(code + (e.episodeTitle ? ` — "${e.episodeTitle}"` : ""));
+  if (e.kind === "upgrade" && e.previousQuality && e.quality) {
+    descParts.push(`${e.previousQuality} → ${e.quality}`);
+  } else if (e.quality) {
+    descParts.push(e.quality);
+  }
+
+  const embed: DiscordEmbed = {
+    title: `${KIND_LABEL[e.kind]}: ${e.title}${e.year ? ` (${e.year})` : ""}`,
+    description: descParts.join("\n") || undefined,
+    color: COLORS[e.kind as keyof typeof COLORS],
+    footer: { text: e.mediaType === "series" ? "Sonarr" : "Radarr" },
+  };
+  if (settings.showPoster && e.posterUrl) {
+    embed.thumbnail = { url: e.posterUrl };
+  }
+  return embed;
+}
+
 function buildDetailedEmbeds(
   events: DigestEvent[],
   settings: Settings,
@@ -118,28 +239,8 @@ function buildDetailedEmbeds(
   const sorted = [...events].sort(
     (a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind),
   );
-
-  return sorted.map((e) => {
-    const code = episodeCode(e);
-    const descParts: string[] = [];
-    if (code) descParts.push(code + (e.episodeTitle ? ` — "${e.episodeTitle}"` : ""));
-    if (e.kind === "upgrade" && e.previousQuality && e.quality) {
-      descParts.push(`${e.previousQuality} → ${e.quality}`);
-    } else if (e.quality) {
-      descParts.push(e.quality);
-    }
-
-    const embed: DiscordEmbed = {
-      title: `${KIND_LABEL[e.kind]}: ${e.title}${e.year ? ` (${e.year})` : ""}`,
-      description: descParts.join("\n") || undefined,
-      color: COLORS[e.kind as keyof typeof COLORS],
-      footer: { text: e.mediaType === "series" ? "Sonarr" : "Radarr" },
-    };
-    if (settings.showPoster && e.posterUrl) {
-      embed.thumbnail = { url: e.posterUrl };
-    }
-    return embed;
-  });
+  const units = groupIntoDisplayUnits(sorted);
+  return units.map((u) => buildUnitEmbed(u.events, settings));
 }
 
 // Discord allows max 10 embeds per message; split into multiple messages.
