@@ -40,15 +40,46 @@ proxying) on `:5173`. Open `http://localhost:5173`.
 
 The SQLite database is created at `server/data/digest.sqlite` on first run.
 
-## Running in Docker (e.g. Unraid)
+## Running in Docker
 
 ```bash
 docker compose up -d --build
 ```
 
 This builds the image and starts it on port `8080`, persisting the SQLite
-database in `./data`. On Unraid, point the container's `/app/data` mapping
-at an appdata share and expose port 8080 like any other container.
+database in `./data`.
+
+This isn't published to a registry (Docker Hub, GHCR, etc.) — it's built
+locally wherever you run it, including on Unraid itself (below).
+
+## Running on Unraid
+
+The image is built directly on the Unraid box; nothing is pulled from a
+registry.
+
+1. **Build the image on Unraid.** Open a terminal on Unraid (SSH or the
+   built-in Web Terminal) and run:
+
+   ```bash
+   cd /mnt/user/appdata
+   git clone https://github.com/EthanetXYZ/arr-digest.git
+   cd arr-digest
+   docker build -t arr-digest:latest .
+   ```
+
+   Re-run the `git pull` + `docker build` there whenever you want to update.
+
+2. **Add the template.** Copy [unraid-template.xml](unraid-template.xml) to
+   `/boot/config/plugins/dockerMan/templates-user/` on the flash share (via
+   the `flash` share or the same terminal), then it appears in the template
+   dropdown next time you open **Docker tab → Add Container → Template**.
+3. Check the **Data** path (defaults to `/mnt/user/appdata/arr-digest`) and
+   **WebUI Port** (defaults to `8080`), then **Apply**. Since the image only
+   exists locally, leave auto-update checking off for this container —
+   there's nothing to pull.
+4. Open the container's WebUI and continue with **Setup** below. Use your
+   Unraid server's LAN IP as the **Public URL** in Settings so the webhook
+   URLs Sonarr/Radarr get are correct (see below).
 
 Environment variables (all optional):
 

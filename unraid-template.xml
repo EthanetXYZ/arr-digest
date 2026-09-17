@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>arr-digest</Name>
+  <Repository>arr-digest:latest</Repository>
+  <Registry>https://github.com/EthanetXYZ/arr-digest</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/EthanetXYZ/arr-digest/issues</Support>
+  <Project>https://github.com/EthanetXYZ/arr-digest</Project>
+  <Overview>Self-hosted digest bot for Sonarr and Radarr. Listens for their webhook notifications, shows additions/upgrades/removals live in a web UI, and posts a scheduled summary to Discord. Configure the digest schedule, Discord webhook, and display options from the web UI after starting the container.
+
+This image is not published to a registry — build it locally on the Unraid host first (see README.md's "Running on Unraid" section), then Unraid will use that local `arr-digest:latest` image instead of trying to pull one. If you skip the build step, container start will fail with "no such image".</Overview>
+  <Category>MediaApp:Other Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/EthanetXYZ/arr-digest/main/unraid-template.xml</TemplateURL>
+  <Icon/>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="8080" Default="8080" Mode="tcp" Description="Port for the web UI, and for the webhook URLs you'll paste into Sonarr/Radarr" Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Data" Target="/app/data" Default="/mnt/user/appdata/arr-digest" Mode="rw" Description="Persistent storage for the SQLite database (settings, event history)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/arr-digest</Config>
+  <Config Name="TZ" Target="TZ" Default="Etc/UTC" Mode="" Description="Container timezone. Note: the digest send time itself is set in the app's Settings page, in whatever timezone you pick there — this only affects container logs/timestamps." Type="Variable" Display="advanced" Required="false" Mask="false">Etc/UTC</Config>
+</Container>
