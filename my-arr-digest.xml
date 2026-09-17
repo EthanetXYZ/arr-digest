@@ -14,7 +14,7 @@
 This image is not published to a registry — build it locally on the Unraid host first (see README.md's "Running on Unraid" section), then Unraid will use that local `arr-digest:latest` image instead of trying to pull one. If you skip the build step, container start will fail with "no such image".</Overview>
   <Category>MediaApp:Other Tools:</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/EthanetXYZ/arr-digest/main/unraid-template.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/EthanetXYZ/arr-digest/main/my-arr-digest.xml</TemplateURL>
   <Icon/>
   <ExtraParams/>
   <PostArgs/>

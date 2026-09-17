@@ -69,10 +69,12 @@ registry.
 
    Re-run the `git pull` + `docker build` there whenever you want to update.
 
-2. **Add the template.** Copy [unraid-template.xml](unraid-template.xml) to
+2. **Add the template.** Copy [my-arr-digest.xml](my-arr-digest.xml) to
    `/boot/config/plugins/dockerMan/templates-user/` on the flash share (via
-   the `flash` share or the same terminal), then it appears in the template
-   dropdown next time you open **Docker tab → Add Container → Template**.
+   the `flash` share or the same terminal). The `my-` prefix matters — it's
+   the naming convention Unraid's template scanner expects; a file without
+   it won't show up in the dropdown. It then appears next time you open
+   **Docker tab → Add Container → Template**.
 3. Check the **Data** path (defaults to `/mnt/user/appdata/arr-digest`) and
    **WebUI Port** (defaults to `8080`), then **Apply**. Since the image only
    exists locally, leave auto-update checking off for this container —
