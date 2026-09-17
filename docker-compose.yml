@@ -1,0 +1,12 @@
+services:
+  arr-digest:
+    build: .
+    # image: ghcr.io/yourname/arr-digest:latest
+    container_name: arr-digest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Etc/UTC
