@@ -68,6 +68,8 @@ export function useLiveEvents(maxItems = 200) {
           setEvents((prev) => prev.filter((e) => !sentIds.has(e.id)));
         } else if (msg.type === "digest_error") {
           applyLastRun({ ok: false, error: msg.error, ranAt: msg.ranAt });
+        } else if (msg.type === "event_removed") {
+          setEvents((prev) => prev.filter((e) => e.id !== msg.id));
         }
       };
 

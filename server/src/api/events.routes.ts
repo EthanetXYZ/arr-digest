@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { getPendingDigestEvents, getRecentEvents } from "../webhooks/events-service.js";
+import {
+  getPendingDigestEvents,
+  getRecentEvents,
+  removePendingEvent,
+} from "../webhooks/events-service.js";
 import {
   getDigestHistory,
   renderPreview,
@@ -7,6 +11,7 @@ import {
   sendTestDigest,
   type PreviewOverrides,
 } from "../digest/service.js";
+import { broadcast } from "../realtime/ws.js";
 
 export async function eventsRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { limit?: string } }>("/api/events/recent", async (req) => {
@@ -16,6 +21,22 @@ export async function eventsRoutes(app: FastifyInstance) {
 
   app.get("/api/events/pending", async () => {
     return getPendingDigestEvents();
+  });
+
+  // Manually drop a not-yet-sent item from the queue — e.g. a stray or
+  // unwanted entry. Broadcasts to all connected clients so it disappears
+  // from every open Live Feed, not just the one that removed it.
+  app.delete<{ Params: { id: string } }>("/api/events/:id", async (req, reply) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return reply.code(400).send({ ok: false, error: "Invalid event id" });
+    }
+    const removed = removePendingEvent(id);
+    if (!removed) {
+      return reply.code(404).send({ ok: false, error: "Not found or already sent" });
+    }
+    broadcast({ type: "event_removed", id });
+    return { ok: true };
   });
 
   app.get("/api/digest/history", async () => {

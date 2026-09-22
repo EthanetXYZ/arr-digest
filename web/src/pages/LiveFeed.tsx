@@ -39,6 +39,15 @@ export function LiveFeed() {
 
   const showBanner = lastRun && !lastRun.ok && lastRun.ranAt !== bannerDismissedAt;
 
+  async function handleRemove(id: number) {
+    try {
+      const res = await api.removeEvent(id);
+      if (!res.ok) setSendResult(res.error ?? "Couldn't remove that item.");
+    } catch (err) {
+      setSendResult(err instanceof Error ? err.message : "Couldn't remove that item.");
+    }
+  }
+
   async function sendNow() {
     setSending(true);
     setSendResult(null);
@@ -125,7 +134,7 @@ export function LiveFeed() {
           </div>
         )}
         {groups.map((group) => (
-          <EventCard key={group[0].id} events={group} />
+          <EventCard key={group[0].id} events={group} onRemove={handleRemove} />
         ))}
       </div>
     </div>

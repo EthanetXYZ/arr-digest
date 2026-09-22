@@ -77,4 +77,5 @@ export type WsMessage =
   | { type: "backlog"; events: MediaEvent[] }
   | { type: "event"; event: MediaEvent }
   | { type: "digest_sent"; eventCount: number; ranAt: number; eventIds: number[] }
-  | { type: "digest_error"; error: string; ranAt: number };
+  | { type: "digest_error"; error: string; ranAt: number }
+  | { type: "event_removed"; id: number };

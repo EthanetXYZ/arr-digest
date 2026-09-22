@@ -32,6 +32,8 @@ export const api = {
     }),
   getRecentEvents: (limit = 100) => request<MediaEvent[]>(`/api/events/recent?limit=${limit}`),
   getPendingEvents: () => request<MediaEvent[]>("/api/events/pending"),
+  removeEvent: (id: number) =>
+    request<{ ok: boolean; error?: string }>(`/api/events/${id}`, { method: "DELETE" }),
   getDigestHistory: () => request<DigestRun[]>("/api/digest/history"),
   runDigestNow: () => request<{ ok: boolean; error?: string }>("/api/digest/run-now", { method: "POST" }),
   getNetworkInfo: () => request<NetworkInfo>("/api/system/network-info"),
