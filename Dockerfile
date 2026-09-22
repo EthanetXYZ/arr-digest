@@ -5,8 +5,10 @@ WORKDIR /app
 
 # python3/make/g++ let better-sqlite3 fall back to a source build if no
 # prebuilt binary matches the target platform (e.g. some Unraid/arm hosts).
+# git is only used below to stamp the build with a commit SHA -- it never
+# ends up in the runtime image.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ \
+  && apt-get install -y --no-install-recommends python3 make g++ git \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json ./
@@ -16,6 +18,17 @@ RUN npm install
 
 COPY . .
 RUN npm run build
+
+# Bakes in what was actually built, so it's possible to tell from the
+# running app whether an Unraid rebuild picked up the latest code -- a
+# mismatch here (checked against `git log` on GitHub) means the rebuild
+# didn't actually happen or pulled the wrong commit.
+RUN { \
+      echo "{" ; \
+      echo "  \"commit\": \"$(git rev-parse --short HEAD 2>/dev/null || echo unknown)\"," ; \
+      echo "  \"builtAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" ; \
+      echo "}" ; \
+    } > /app/version.json
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
@@ -30,6 +43,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/server/package.json ./server/package.json
 COPY --from=builder /app/web/dist ./web/dist
+COPY --from=builder /app/version.json ./version.json
 
 VOLUME ["/app/data"]
 EXPOSE 8080

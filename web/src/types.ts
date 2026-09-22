@@ -42,6 +42,11 @@ export interface NetworkInfo {
   port: string | null;
 }
 
+export interface VersionInfo {
+  commit: string;
+  builtAt: string | null;
+}
+
 export interface DiscordEmbed {
   title?: string;
   description?: string;

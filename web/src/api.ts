@@ -5,6 +5,7 @@ import type {
   NetworkInfo,
   PreviewOverrides,
   Settings,
+  VersionInfo,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -34,6 +35,7 @@ export const api = {
   getDigestHistory: () => request<DigestRun[]>("/api/digest/history"),
   runDigestNow: () => request<{ ok: boolean; error?: string }>("/api/digest/run-now", { method: "POST" }),
   getNetworkInfo: () => request<NetworkInfo>("/api/system/network-info"),
+  getVersion: () => request<VersionInfo>("/api/version"),
   renderDigestPreview: (settings: PreviewOverrides, sample = true) =>
     request<{ messages: DiscordMessage[] }>("/api/digest/render", {
       method: "POST",

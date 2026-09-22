@@ -20,6 +20,13 @@ export interface NormalizedEvent {
   occurredAt: number;
 }
 
+// deleteReason is serialized through Sonarr/Radarr's global camelCase enum
+// converter ("upgrade"), unlike eventType which has a PascalCase override
+// ("Download"). Compare case-insensitively so either form is caught.
+function isUpgradeDelete(reason: string | undefined): boolean {
+  return reason?.toLowerCase() === "upgrade";
+}
+
 function pickPoster(images: WebhookImage[] | undefined): string | null {
   if (!images?.length) return null;
   const poster = images.find((i) => i.coverType === "poster") ?? images[0];
@@ -60,7 +67,7 @@ export function normalizeSonarrEvent(
     // Deletes caused by an import upgrade are already represented by the
     // paired Download event (isUpgrade: true) — reporting this too would
     // double-count the same file swap as a spurious "removal".
-    if (payload.deleteReason === "Upgrade") return null;
+    if (isUpgradeDelete(payload.deleteReason)) return null;
 
     const ep = payload.episodes?.[0];
     return {
@@ -114,7 +121,7 @@ export function normalizeRadarrEvent(
   }
 
   if (payload.eventType === "MovieFileDelete" && payload.movie) {
-    if (payload.deleteReason === "Upgrade") return null;
+    if (isUpgradeDelete(payload.deleteReason)) return null;
 
     return {
       source: "radarr",

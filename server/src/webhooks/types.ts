@@ -33,12 +33,7 @@ export interface SonarrEpisodeFile {
   size?: number;
 }
 
-export type DeleteMediaFileReason =
-  | "MissingFromDisk"
-  | "Manual"
-  | "Upgrade"
-  | "NoLinkedEpisodes"
-  | "ManualOverride";
+export type DeleteMediaFileReason = string;
 
 export interface SonarrWebhookPayload {
   eventType:
