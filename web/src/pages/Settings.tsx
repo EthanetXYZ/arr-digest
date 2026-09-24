@@ -357,7 +357,7 @@ export function Settings() {
   const showSaveBar = TABS_WITH_SAVE.includes(activeTab) || dirty;
 
   return (
-    <div className={`mx-auto max-w-2xl px-4 ${showSaveBar ? "pb-24" : "pb-6"}`}>
+    <div className="mx-auto max-w-2xl px-4 pb-6">
       <TabPills active={activeTab} onSelect={selectTab} />
 
       {show("connection") && (
@@ -676,10 +676,30 @@ function SaveBar({
   onSave: () => void;
   onDiscard: () => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Publishes the bar's height while it's showing, so the page footer can
+  // leave that much room and nothing ends up hidden underneath it. Measured
+  // live because an error message can make the bar taller.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const update = () => root.style.setProperty("--save-bar-space", `${el.offsetHeight}px`);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--save-bar-space");
+    };
+  }, []);
+
   return (
     // Fixed rather than sticky, so it sits at the bottom of the window even
-    // on short tabs (the page reserves room for it with bottom padding).
+    // on short tabs.
     <div
+      ref={ref}
       className={`fixed inset-x-0 bottom-0 z-20 border-t backdrop-blur transition-colors ${
         dirty ? "border-amber-400/40 bg-slate-900/95" : "border-slate-800 bg-slate-950/90"
       }`}

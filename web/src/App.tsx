@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { Route, Routes } from "react-router-dom";
 import { Nav } from "./components/Nav";
+import { Footer } from "./components/Footer";
 import { AuthScreen } from "./components/AuthScreen";
 import { LiveFeed } from "./pages/LiveFeed";
 import { Settings } from "./pages/Settings";
@@ -28,12 +29,17 @@ export function App() {
     <AuthGate signedOut={(status, setStatus) => <AuthScreen status={status} onSignedIn={setStatus} />}>
       <LiveEventsProvider>
         <TitleUpdater />
-        <div className="min-h-screen">
+        {/* Column layout so the footer sits at the bottom of the window
+            even when a page is short. */}
+        <div className="flex min-h-screen flex-col">
           <Nav />
-          <Routes>
-            <Route path="/" element={<LiveFeed />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
+          <main className="w-full">
+            <Routes>
+              <Route path="/" element={<LiveFeed />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          </main>
+          <Footer />
         </div>
       </LiveEventsProvider>
     </AuthGate>
