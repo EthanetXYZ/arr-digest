@@ -30,7 +30,8 @@ export function LiveFeed() {
   // Everything in `events` is inherently still pending — already-digested
   // items are dropped from state entirely (see useLiveEvents) rather than
   // just dimmed, so the feed doesn't pile up with old, already-sent items.
-  const pendingCount = events.length;
+  // Counted as the cards shown, so a 10-episode season batch is 1, not 10.
+  const pendingCount = useMemo(() => groupLiveEvents(events).length, [events]);
   const filtered = useMemo(
     () => (filter === "all" ? events : events.filter((e) => e.kind === filter)),
     [events, filter],

@@ -2,7 +2,7 @@ import { db } from "../db/client.js";
 import { digestRuns } from "../db/schema.js";
 import { existingEventIds, markEventsDigested } from "../webhooks/events-service.js";
 import { broadcast } from "../realtime/ws.js";
-import { buildDigestMessages, type DigestEvent } from "./builder.js";
+import { buildDigestMessages, countDisplayUnits, type DigestEvent } from "./builder.js";
 import { sendDiscordMessages } from "./discord.js";
 import {
   eventMatchesDestination,
@@ -83,7 +83,7 @@ async function flush(destId: number) {
     const ranAt = Date.now();
     const error = `Instant push to ${dest.name} failed: ${err instanceof Error ? err.message : String(err)}`;
     console.error(`[instant] ${error}`);
-    db.insert(digestRuns).values({ ranAt, eventCount: events.length, status: "error", error }).run();
+    db.insert(digestRuns).values({ ranAt, eventCount: countDisplayUnits(events), status: "error", error }).run();
     broadcast({ type: "digest_error", error, ranAt });
   }
 }

@@ -7,7 +7,7 @@ import {
   getPendingDigestEvents,
   markEventsDigested,
 } from "../webhooks/events-service.js";
-import { buildDigestMessages, type DigestEvent, type DiscordMessage } from "./builder.js";
+import { buildDigestMessages, countDisplayUnits, renderTitle, type DigestEvent, type DiscordMessage } from "./builder.js";
 import { sendDiscordMessages } from "./discord.js";
 import { getSampleEvents } from "./sample-data.js";
 import {
@@ -26,7 +26,7 @@ import { broadcast } from "../realtime/ws.js";
 export type PreviewOverrides = FormatOverrides;
 
 function emptyDigestMessage(settings: Settings): DiscordMessage {
-  const title = settings.digestTitle?.trim();
+  const title = renderTitle(settings.digestTitle ?? "", []).trim();
   const mention = settings.mentionContent?.trim();
   const content = [mention, title ? `**${title}**` : undefined, "No changes since the last digest."]
     .filter(Boolean)
@@ -90,7 +90,7 @@ export async function runDigest(onlyIds?: number[]): Promise<{ warning?: string 
 
   if (enabled.length === 0) {
     const error = "No enabled Discord destinations configured";
-    db.insert(digestRuns).values({ ranAt, eventCount: pending.length, status: "error", error }).run();
+    db.insert(digestRuns).values({ ranAt, eventCount: countDisplayUnits(pending), status: "error", error }).run();
     broadcast({ type: "digest_error", error, ranAt });
     throw new Error(error);
   }
@@ -116,7 +116,7 @@ export async function runDigest(onlyIds?: number[]): Promise<{ warning?: string 
       advanceWatermark(dest.id, upTo);
       for (const e of mine) delivered.add(e.id);
       db.insert(digestRuns)
-        .values({ ranAt, eventCount: mine.length, status: "sent", destinationName: dest.name })
+        .values({ ranAt, eventCount: countDisplayUnits(mine), status: "sent", destinationName: dest.name })
         .run();
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
@@ -124,7 +124,7 @@ export async function runDigest(onlyIds?: number[]): Promise<{ warning?: string 
       db.insert(digestRuns)
         .values({
           ranAt,
-          eventCount: mine.length,
+          eventCount: countDisplayUnits(mine),
           status: "error",
           error: `${reason} — will retry on its next run`,
           destinationName: dest.name,
@@ -143,7 +143,8 @@ export async function runDigest(onlyIds?: number[]): Promise<{ warning?: string 
   // digest_sent before digest_error: clients keep the last-arriving status
   // for a given ranAt, and the failure is what needs to stay visible.
   if (delivered.size > 0 || done.length > 0) {
-    broadcast({ type: "digest_sent", eventCount: delivered.size, ranAt, eventIds: done });
+    const deliveredEvents = pending.filter((e) => delivered.has(e.id));
+    broadcast({ type: "digest_sent", eventCount: countDisplayUnits(deliveredEvents), ranAt, eventIds: done });
   }
 
   if (failures.length === 0) return {};

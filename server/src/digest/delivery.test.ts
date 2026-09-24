@@ -181,6 +181,17 @@ describe("scheduled digest", () => {
     ]);
   });
 
+  it("records history counts as items shown, so a season batch counts once", async () => {
+    dest("all", discord.url("all"));
+    for (const n of [1, 2, 3, 4]) {
+      event({ source: "sonarr", mediaType: "series", title: "Show", seasonNumber: 1, episodeNumber: n });
+    }
+    event({ title: "Film" });
+    await runDigest();
+    const row = sqlite.prepare("SELECT event_count AS n FROM digest_runs").get() as { n: number };
+    assert.equal(row.n, 2);
+  });
+
   it("on total failure, keeps items queued so the next run retries them", async () => {
     dest("broken", UNREACHABLE_URL);
     event({});

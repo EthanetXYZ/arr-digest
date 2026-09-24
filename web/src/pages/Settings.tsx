@@ -108,6 +108,67 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Mirrors TITLE_VARIABLES in server/src/digest/builder.ts.
+const TITLE_VARIABLES: { token: string; hint: string }[] = [
+  { token: "{count:item}", hint: "Every item in the message" },
+  { token: "{added:item}", hint: "Items added" },
+  { token: "{upgraded:item}", hint: "Items upgraded" },
+  { token: "{removed:item}", hint: "Items removed" },
+  { token: "{movies:movie}", hint: "Movies" },
+  { token: "{shows:show}", hint: "Different TV shows" },
+  { token: "{episodes:episode}", hint: "Individual episodes" },
+];
+
+function TitleInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  // Inserts at the cursor (or replaces the selection), then puts the cursor
+  // after the inserted text so several can be added in a row.
+  function insert(token: string) {
+    const input = ref.current;
+    const start = input?.selectionStart ?? value.length;
+    const end = input?.selectionEnd ?? value.length;
+    const needsSpace = start > 0 && !/\s$/.test(value.slice(0, start));
+    const text = (needsSpace ? " " : "") + token;
+    onChange(value.slice(0, start) + text + value.slice(end));
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(start + text.length, start + text.length);
+    });
+  }
+
+  return (
+    <div className="mb-2">
+      <input
+        ref={ref}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-md border border-slate-800 bg-slate-900 px-2 py-1.5 text-sm text-slate-200"
+      />
+      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+        <span className="mr-0.5 text-xs text-slate-500">Insert:</span>
+        {TITLE_VARIABLES.map((v) => (
+          <button
+            key={v.token}
+            type="button"
+            title={v.hint}
+            onClick={() => insert(v.token)}
+            className="rounded border border-slate-700 px-1.5 py-0.5 font-mono text-[11px] text-slate-300 hover:border-upgrade hover:text-upgrade"
+          >
+            {v.token}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-slate-500">
+        Filled in per message, e.g. <code className="text-slate-400">{"{added:item} added today"}</code> →
+        "3 items added today" (or "1 item"). Drop the <code className="text-slate-400">:item</code> for just the
+        number, or give an irregular plural like <code className="text-slate-400">{"{count:entry|entries}"}</code>.
+        A season batch counts as one item.
+      </p>
+    </div>
+  );
+}
+
 const TABS = [
   { key: "all", label: "All" },
   { key: "connection", label: "Connection" },
@@ -419,11 +480,7 @@ export function Settings() {
       <section className="mb-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
         <h2 className="mb-3 text-lg font-semibold text-white">Digest content</h2>
         <label className="mb-1 block text-sm font-medium text-slate-200">Title</label>
-        <input
-          value={settings.digestTitle}
-          onChange={(e) => patch({ digestTitle: e.target.value })}
-          className="mb-2 w-full rounded-md border border-slate-800 bg-slate-900 px-2 py-1.5 text-sm text-slate-200"
-        />
+        <TitleInput value={settings.digestTitle} onChange={(digestTitle) => patch({ digestTitle })} />
         <Toggle
           label="Group by media type"
           hint="Separate sections for TV shows and movies"

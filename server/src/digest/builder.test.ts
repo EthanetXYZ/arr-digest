@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildDigestMessages, type DigestEvent } from "./builder.js";
+import { buildDigestMessages, countDisplayUnits, renderTitle, type DigestEvent } from "./builder.js";
 import type { Settings } from "../config/settings.js";
 
 const settings: Settings = {
@@ -61,7 +61,48 @@ describe("buildDigestMessages", () => {
     ];
     const messages = buildDigestMessages(events, settings);
     const titles = messages.flatMap((m) => m.embeds.map((e) => e.title));
-    assert.deepEqual(titles, ["Added — TV Shows (2)", "Upgraded — TV Shows (1)"]);
+    // Two added episodes of one season are one line, so one item.
+    assert.deepEqual(titles, ["Added — TV Shows (1)", "Upgraded — TV Shows (1)"]);
+  });
+
+  it("counts a season batch as one item, in headers and in countDisplayUnits", () => {
+    const events = [
+      ...[1, 2, 3, 4, 5, 6].map((n) => ev({ episodeNumber: n })),
+      ev({ title: "Other Show", episodeNumber: 1 }),
+      ev({ seasonNumber: 2, episodeNumber: 1 }),
+    ];
+    const titles = buildDigestMessages(events, settings).flatMap((m) => m.embeds.map((e) => e.title));
+    // S01 batch + Other Show + the lone S02 episode: three lines.
+    assert.deepEqual(titles, ["Added — TV Shows (3)"]);
+    assert.equal(countDisplayUnits(events), 3);
+
+    const movies = [1, 2].map((id) => ev({ id, mediaType: "movie", title: `Movie ${id}`, seasonNumber: null, episodeNumber: null }));
+    assert.equal(countDisplayUnits(movies), 2, "movies are never grouped");
+  });
+
+  it("fills title variables from the events in the message", () => {
+    const events = [
+      ...[1, 2, 3].map((n) => ev({ episodeNumber: n })), // one batch
+      ev({ title: "Other", episodeNumber: 1, kind: "upgrade", previousQuality: "HDTV-720p" }),
+      ev({ mediaType: "movie", title: "Film", seasonNumber: null, episodeNumber: null }),
+      ev({ mediaType: "movie", title: "Gone", seasonNumber: null, episodeNumber: null, kind: "removal" }),
+    ];
+    assert.equal(renderTitle("{count} new", events), "4 new");
+    assert.equal(renderTitle("{added:item} were added", events), "2 items were added");
+    assert.equal(renderTitle("{upgraded:item}, {removed:item}", events), "1 item, 1 item");
+    assert.equal(renderTitle("{shows} shows, {episodes} eps, {movies} films", events), "2 shows, 4 eps, 2 films");
+    assert.equal(renderTitle("{count:entry|entries}", events), "4 entries");
+    assert.equal(renderTitle("{removed:entry|entries}", events), "1 entry");
+    // Unknown names and stray braces are left alone.
+    assert.equal(renderTitle("{nope} {count", events), "{nope} {count");
+    assert.equal(renderTitle("Library Digest", events), "Library Digest");
+    assert.equal(renderTitle("{added:item}", []), "0 items");
+  });
+
+  it("puts the rendered title in the message header", () => {
+    const titled = { ...settings, digestTitle: "{added:item} added" };
+    const events = [1, 2].map((n) => ev({ episodeNumber: n }));
+    assert.equal(buildDigestMessages(events, titled)[0].content, "**1 item added**");
   });
 
   it("keeps a lone episode on its own line, with its title", () => {

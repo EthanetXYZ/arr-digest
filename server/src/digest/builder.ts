@@ -69,6 +69,14 @@ type DisplayUnit = { events: DigestEvent[] };
 // Multiple episodes of the same show + season + kind (e.g. a whole season
 // pack landing at once) are collapsed into one unit instead of one line/embed
 // per episode — otherwise a season premiere blows past Discord's embed limits.
+// How many items a set of events shows up as — a season batch counts once,
+// not once per episode. Every count shown to people (section headers,
+// history, "last digest sent N items") uses this, so it matches the lines
+// they actually see.
+export function countDisplayUnits(events: DigestEvent[]): number {
+  return groupIntoDisplayUnits(events).length;
+}
+
 function groupIntoDisplayUnits(events: DigestEvent[]): DisplayUnit[] {
   const seasonGroups = new Map<string, DigestEvent[]>();
   const order: string[] = [];
@@ -177,8 +185,8 @@ function buildCompactEmbeds(
       }
 
       const title = settings.groupByType
-        ? `${KIND_LABEL[kind]} — ${mediaTypeLabel(mediaType)} (${items.length})`
-        : `${KIND_LABEL[kind]} (${items.length})`;
+        ? `${KIND_LABEL[kind]} — ${mediaTypeLabel(mediaType)} (${units.length})`
+        : `${KIND_LABEL[kind]} (${units.length})`;
 
       embeds.push({
         title,
@@ -269,9 +277,39 @@ export function buildDigestMessages(
   }));
 }
 
+// Placeholders for the digest title, filled in from the events in that
+// message (so each destination's digest counts only what it received).
+// Counts are items as shown — a season batch is one — except {episodes}.
+//   {added}            -> "3"
+//   {added:item}       -> "3 items" / "1 item"
+//   {count:entry|entries} -> irregular plural, given after "|"
+// Unknown names are left as typed, so literal braces survive.
+export const TITLE_VARIABLES = ["count", "added", "upgraded", "removed", "movies", "shows", "episodes"] as const;
+
+export function renderTitle(template: string, events: DigestEvent[]): string {
+  const units = groupIntoDisplayUnits(events);
+  const unitsWhere = (pred: (e: DigestEvent) => boolean) => units.filter((u) => pred(u.events[0])).length;
+  const values: Record<(typeof TITLE_VARIABLES)[number], number> = {
+    count: units.length,
+    added: unitsWhere((e) => e.kind === "addition"),
+    upgraded: unitsWhere((e) => e.kind === "upgrade"),
+    removed: unitsWhere((e) => e.kind === "removal"),
+    movies: unitsWhere((e) => e.mediaType === "movie"),
+    shows: new Set(events.filter((e) => e.mediaType === "series").map((e) => `${e.title}|${e.year}`)).size,
+    episodes: events.filter((e) => e.mediaType === "series").length,
+  };
+
+  return template.replace(/\{(\w+)(?::([^{}|]+)(?:\|([^{}]+))?)?\}/g, (match, name: string, word?: string, plural?: string) => {
+    if (!(name in values)) return match;
+    const n = values[name as keyof typeof values];
+    if (!word) return String(n);
+    return `${n} ${n === 1 ? word : (plural ?? `${word}s`)}`;
+  });
+}
+
 function buildHeader(events: DigestEvent[], settings: Settings): string | undefined {
   const mention = settings.mentionContent?.trim();
-  const title = settings.digestTitle?.trim();
+  const title = renderTitle(settings.digestTitle ?? "", events).trim();
   const bits = [mention, title ? `**${title}**` : undefined].filter(Boolean);
   return bits.length ? bits.join(" ") : undefined;
 }

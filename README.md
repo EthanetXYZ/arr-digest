@@ -216,6 +216,23 @@ Also on the Settings page: send times (you can add more than one per day),
 timezone, whether to group Movies/TV separately, compact vs. one-embed-per-item
 display, and whether to skip sending when there's nothing to report.
 
+The digest title can include counts, filled in for each message (so each
+destination's digest counts only what it received):
+
+| Variable | Counts |
+|----------|--------|
+| `{count}` | Every item in the message |
+| `{added}`, `{upgraded}`, `{removed}` | Items of that kind |
+| `{movies}` | Movies |
+| `{shows}` | Different TV shows |
+| `{episodes}` | Individual episodes |
+
+Add a word after a colon to get it pluralised: `{added:item} added today`
+becomes "3 items added today" or "1 item added today". For irregular
+plurals, give both forms: `{count:entry|entries}`. A season batch counts as
+one item everywhere — in the title, the section headers, and the Live
+Feed's pending count.
+
 ## Live Feed
 
 The home page shows events as they arrive from Sonarr/Radarr in real time,
