@@ -7,7 +7,7 @@ import {
   getPendingDigestEvents,
   markEventsDigested,
 } from "../webhooks/events-service.js";
-import { buildDigestMessages, countDisplayUnits, renderTitle, type DigestEvent, type DiscordMessage } from "./builder.js";
+import { buildDigestMessages, countDisplayUnits, renderDigestTitle, type DigestEvent, type DiscordMessage } from "./builder.js";
 import { sendDiscordMessages } from "./discord.js";
 import { getSampleEvents } from "./sample-data.js";
 import {
@@ -26,7 +26,7 @@ import { broadcast } from "../realtime/ws.js";
 export type PreviewOverrides = FormatOverrides;
 
 function emptyDigestMessage(settings: Settings): DiscordMessage {
-  const title = renderTitle(settings.digestTitle ?? "", []).trim();
+  const title = renderDigestTitle(settings.digestTitle ?? "", []);
   const mention = settings.mentionContent?.trim();
   const content = [mention, title ? `**${title}**` : undefined, "No changes since the last digest."]
     .filter(Boolean)

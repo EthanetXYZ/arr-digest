@@ -114,9 +114,11 @@ const TITLE_VARIABLES: { token: string; hint: string }[] = [
   { token: "{added:item}", hint: "Items added" },
   { token: "{upgraded:item}", hint: "Items upgraded" },
   { token: "{removed:item}", hint: "Items removed" },
-  { token: "{movies:movie}", hint: "Movies" },
-  { token: "{shows:show}", hint: "Different TV shows" },
-  { token: "{episodes:episode}", hint: "Individual episodes" },
+  {
+    token: "{added_movies:movie, added_episodes:episode}",
+    hint: "Movies and episodes added, leaving out whichever is zero",
+  },
+  { token: "{was|were}", hint: "'was' after a count of one, otherwise 'were'" },
 ];
 
 function TitleInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -159,12 +161,24 @@ function TitleInput({ value, onChange }: { value: string; onChange: (v: string) 
           </button>
         ))}
       </div>
-      <p className="mt-1 text-xs text-slate-500">
-        Filled in per message, e.g. <code className="text-slate-400">{"{added:item} added today"}</code> →
-        "3 items added today" (or "1 item"). Drop the <code className="text-slate-400">:item</code> for just the
-        number, or give an irregular plural like <code className="text-slate-400">{"{count:entry|entries}"}</code>.
-        A season batch counts as one item.
-      </p>
+      <div className="mt-1 space-y-1 text-xs text-slate-500">
+        <p>
+          Filled in per message: <code className="text-slate-400">{"{added:item} {was|were} added"}</code> → "3
+          items were added" / "1 item was added". A season batch counts as one item.
+        </p>
+        <p>
+          List several in one pair of braces and zeros are left out:{" "}
+          <code className="text-slate-400">{"{added_movies:movie, added_episodes:episode}"}</code> → "2 movies & 7
+          episodes", or just "7 episodes". If every count in the title is zero, the title is left off.
+        </p>
+        <p>
+          <code className="text-slate-400">movies</code>, <code className="text-slate-400">shows</code> and{" "}
+          <code className="text-slate-400">episodes</code> count every kind; prefix with{" "}
+          <code className="text-slate-400">added_</code>, <code className="text-slate-400">upgraded_</code> or{" "}
+          <code className="text-slate-400">removed_</code> for one kind. Irregular plurals:{" "}
+          <code className="text-slate-400">{"{count:entry|entries}"}</code>.
+        </p>
+      </div>
     </div>
   );
 }

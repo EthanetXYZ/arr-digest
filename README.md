@@ -226,12 +226,26 @@ destination's digest counts only what it received):
 | `{movies}` | Movies |
 | `{shows}` | Different TV shows |
 | `{episodes}` | Individual episodes |
+| `{added_movies}`, `{removed_episodes}`, … | `movies`, `shows` or `episodes` of one kind (`added_`, `upgraded_` or `removed_`) |
 
-Add a word after a colon to get it pluralised: `{added:item} added today`
-becomes "3 items added today" or "1 item added today". For irregular
-plurals, give both forms: `{count:entry|entries}`. A season batch counts as
-one item everywhere — in the title, the section headers, and the Live
-Feed's pending count.
+- **Pluralising:** add a word after a colon. `{added:item} added today`
+  becomes "3 items added today" or "1 item added today". For irregular
+  plurals, give both forms: `{count:entry|entries}`.
+- **Lists:** put several in one pair of braces and zeros are left out:
+  `{added_movies:movie, added_episodes:episode}` becomes "2 movies & 7
+  episodes", or just "7 episodes" when no movies were added.
+- **Agreement:** `{was|were}` (or `{is|are}`, `{has|have}`, …) picks the
+  first form after a count of exactly one thing, otherwise the second:
+  `{added:item} {was|were} added` → "1 item was added" / "3 items were
+  added".
+- **Nothing to say:** if every count in the title is zero, the title is
+  left off (the message still goes out if it has other content — e.g.
+  removals under an "added" title).
+
+Use the `added_` forms for titles about additions — plain `{movies}`
+counts removed and upgraded movies too. A season batch counts as one item
+everywhere — in the title, the section headers, and the Live Feed's
+pending count.
 
 ## Live Feed
 

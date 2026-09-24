@@ -66,9 +66,6 @@ function formatLine(e: DigestEvent): string {
 
 type DisplayUnit = { events: DigestEvent[] };
 
-// Multiple episodes of the same show + season + kind (e.g. a whole season
-// pack landing at once) are collapsed into one unit instead of one line/embed
-// per episode — otherwise a season premiere blows past Discord's embed limits.
 // How many items a set of events shows up as — a season batch counts once,
 // not once per episode. Every count shown to people (section headers,
 // history, "last digest sent N items") uses this, so it matches the lines
@@ -77,6 +74,9 @@ export function countDisplayUnits(events: DigestEvent[]): number {
   return groupIntoDisplayUnits(events).length;
 }
 
+// Multiple episodes of the same show + season + kind (e.g. a whole season
+// pack landing at once) are collapsed into one unit instead of one line/embed
+// per episode — otherwise a season premiere blows past Discord's embed limits.
 function groupIntoDisplayUnits(events: DigestEvent[]): DisplayUnit[] {
   const seasonGroups = new Map<string, DigestEvent[]>();
   const order: string[] = [];
@@ -283,33 +283,125 @@ export function buildDigestMessages(
 //   {added}            -> "3"
 //   {added:item}       -> "3 items" / "1 item"
 //   {count:entry|entries} -> irregular plural, given after "|"
-// Unknown names are left as typed, so literal braces survive.
-export const TITLE_VARIABLES = ["count", "added", "upgraded", "removed", "movies", "shows", "episodes"] as const;
+//   {movies:movie, episodes:episode}
+//                      -> a list: zeros are left out and the rest joined
+//                         naturally ("2 movies & 7 episodes", "7 episodes",
+//                         "2 movies, 3 shows & 7 episodes"); all zero ->
+//                         "no movies or episodes"
+//   {was|were}         -> agrees with the count just before it: the first
+//                         form after exactly one thing, else the second
+//                         ("1 movie was added", "2 movies were added")
+// Anything unrecognised is left as typed, so literal braces survive.
+// {movies}, {shows} and {episodes} count every kind; prefixed with added_,
+// upgraded_ or removed_ they count only that kind — "{movies} were added"
+// would otherwise count a removed movie as added.
+const KIND_PREFIXES = { added: "addition", upgraded: "upgrade", removed: "removal" } as const;
+const MEDIA_COUNTS = ["movies", "shows", "episodes"] as const;
+export const TITLE_VARIABLES = [
+  "count",
+  ...(Object.keys(KIND_PREFIXES) as (keyof typeof KIND_PREFIXES)[]),
+  ...MEDIA_COUNTS,
+  ...(Object.keys(KIND_PREFIXES) as (keyof typeof KIND_PREFIXES)[]).flatMap((k) =>
+    MEDIA_COUNTS.map((m) => `${k}_${m}` as const),
+  ),
+] as const;
+
+type TitleVariable = (typeof TITLE_VARIABLES)[number];
+
+interface TitlePart {
+  name: TitleVariable;
+  word?: string;
+  plural?: string;
+}
+
+function parseTitlePart(text: string): TitlePart | null {
+  const m = text.trim().match(/^(\w+)\s*(?::\s*([^|]+?)\s*(?:\|\s*(.+))?)?$/);
+  if (!m || !(TITLE_VARIABLES as readonly string[]).includes(m[1])) return null;
+  return { name: m[1] as TitleVariable, word: m[2]?.trim(), plural: m[3]?.trim() };
+}
+
+const pluralOf = (p: TitlePart) => p.plural ?? `${p.word}s`;
+
+function formatTitlePart(p: TitlePart, n: number): string {
+  if (!p.word) return String(n);
+  return `${n} ${n === 1 ? p.word : pluralOf(p)}`;
+}
+
+// "a", "a & b", "a, b & c"
+function joinList(items: string[], last: string): string {
+  return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} ${last} ${items.at(-1)}`;
+}
+
+// The title as it goes out: left off entirely when it has counts and every
+// one of them is zero ("no movies or episodes were added" says nothing
+// useful — e.g. a digest of only removals under an additions title).
+export function renderDigestTitle(template: string, events: DigestEvent[]): string {
+  const { text, counted, anyNonZero } = fillTitle(template, events);
+  return counted && !anyNonZero ? "" : text.trim();
+}
 
 export function renderTitle(template: string, events: DigestEvent[]): string {
-  const units = groupIntoDisplayUnits(events);
-  const unitsWhere = (pred: (e: DigestEvent) => boolean) => units.filter((u) => pred(u.events[0])).length;
-  const values: Record<(typeof TITLE_VARIABLES)[number], number> = {
-    count: units.length,
-    added: unitsWhere((e) => e.kind === "addition"),
-    upgraded: unitsWhere((e) => e.kind === "upgrade"),
-    removed: unitsWhere((e) => e.kind === "removal"),
-    movies: unitsWhere((e) => e.mediaType === "movie"),
-    shows: new Set(events.filter((e) => e.mediaType === "series").map((e) => `${e.title}|${e.year}`)).size,
-    episodes: events.filter((e) => e.mediaType === "series").length,
-  };
+  return fillTitle(template, events).text;
+}
 
-  return template.replace(/\{(\w+)(?::([^{}|]+)(?:\|([^{}]+))?)?\}/g, (match, name: string, word?: string, plural?: string) => {
-    if (!(name in values)) return match;
-    const n = values[name as keyof typeof values];
-    if (!word) return String(n);
-    return `${n} ${n === 1 ? word : (plural ?? `${word}s`)}`;
+function fillTitle(
+  template: string,
+  events: DigestEvent[],
+): { text: string; counted: boolean; anyNonZero: boolean } {
+  const mediaCounts = (subset: DigestEvent[]) => {
+    const series = subset.filter((e) => e.mediaType === "series");
+    return {
+      movies: subset.filter((e) => e.mediaType === "movie").length,
+      shows: new Set(series.map((e) => `${e.title}|${e.year}`)).size,
+      episodes: series.length,
+    };
+  };
+  const values = { count: countDisplayUnits(events), ...mediaCounts(events) } as Record<TitleVariable, number>;
+  for (const [prefix, kind] of Object.entries(KIND_PREFIXES)) {
+    const ofKind = events.filter((e) => e.kind === kind);
+    values[prefix as TitleVariable] = countDisplayUnits(ofKind);
+    for (const [media, n] of Object.entries(mediaCounts(ofKind))) {
+      values[`${prefix}_${media}` as TitleVariable] = n;
+    }
+  }
+
+  // Whether the most recent count rendered (left to right) was exactly one
+  // thing, for {was|were}. replace() calls back in order, so this tracks it.
+  let lastWasOne = false;
+  let counted = false;
+  let anyNonZero = false;
+
+  const text = template.replace(/\{([^{}]+)\}/g, (match, body: string) => {
+    const agreement = body.match(/^\s*([^|:,]+?)\s*\|\s*([^|:,]+?)\s*$/);
+    if (agreement && !(TITLE_VARIABLES as readonly string[]).includes(agreement[1])) {
+      return lastWasOne ? agreement[1] : agreement[2];
+    }
+
+    const parts = body.split(",").map(parseTitlePart);
+    if (parts.some((p) => p === null)) return match;
+    const valid = parts as TitlePart[];
+    counted = true;
+    if (valid.some((p) => values[p.name] > 0)) anyNonZero = true;
+
+    if (valid.length === 1) {
+      lastWasOne = values[valid[0].name] === 1;
+      return formatTitlePart(valid[0], values[valid[0].name]);
+    }
+
+    const shown = valid.filter((p) => values[p.name] > 0);
+    lastWasOne = shown.length === 1 && values[shown[0].name] === 1;
+    if (shown.length > 0) return joinList(shown.map((p) => formatTitlePart(p, values[p.name])), "&");
+    // Nothing to list. Worded parts read as "no movies or episodes"; bare
+    // numbers can only honestly be "0".
+    return valid.every((p) => p.word) ? `no ${joinList(valid.map(pluralOf), "or")}` : "0";
   });
+
+  return { text, counted, anyNonZero };
 }
 
 function buildHeader(events: DigestEvent[], settings: Settings): string | undefined {
   const mention = settings.mentionContent?.trim();
-  const title = renderTitle(settings.digestTitle ?? "", events).trim();
+  const title = renderDigestTitle(settings.digestTitle ?? "", events);
   const bits = [mention, title ? `**${title}**` : undefined].filter(Boolean);
   return bits.length ? bits.join(" ") : undefined;
 }
