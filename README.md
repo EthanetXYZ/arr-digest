@@ -9,7 +9,9 @@ are automatically suppressed so they don't also show up as a "removed" item —
 only genuine deletions (manual, missing from disk, etc.) are reported as
 removals.
 
-> **No login — keep it on your home network.** See [Security](#security).
+The web UI is protected by a username and password you create on first
+launch (optionally skipped for devices on your home network). See
+[Security](#security).
 
 ## How it works
 
@@ -109,12 +111,16 @@ be changed without restarting the container.
 
 ## Setup
 
-### 1. Open the web UI and go to Settings
+### 1. Open the web UI, create your login, and go to Settings
 
-It's at `http://<host>:8080` (or `:5173` in dev). The **Settings** page shows
-two webhook URLs, one for Sonarr and one for Radarr, each with a unique
-token baked in — no login is required for the app itself, so this token is
-what keeps random requests on your network from injecting fake events.
+It's at `http://<host>:8080` (or `:5173` in dev). The first visit asks you
+to create a username and password — do this straight away, since until
+you do, whoever opens the page first gets to pick them.
+
+The **Settings** page shows two webhook URLs, one for Sonarr and one for
+Radarr, each with a unique token baked in. Sonarr/Radarr don't log in, so
+this token is what keeps random requests on your network from injecting
+fake events.
 
 > Copy these URLs using the address your Sonarr/Radarr containers can
 > actually reach (e.g. the Docker host's LAN IP), not `localhost`, if they
@@ -188,18 +194,50 @@ digest now" button to trigger an out-of-schedule send.
 
 ## Security
 
-**There is no login.** The app is meant to run on a trusted home network.
-Anyone who can reach the web UI can see and change every setting —
-including your Discord webhook URLs, which on their own are enough to post
-to your channels — and can trigger sends.
+The web UI and its API need a login: one username and password, created on
+first launch and changeable under **Settings → Security**. Passwords are
+stored as scrypt hashes; sessions last 30 days from last use, and changing
+the password signs out every other browser.
 
-- Keep it on your LAN (or a VPN such as Tailscale/WireGuard). Don't
-  port-forward it to the internet.
-- If you need remote access, put it behind a reverse proxy that adds
-  authentication (e.g. Authelia or Authentik in front of Nginx Proxy
-  Manager, SWAG, Caddy or Traefik).
-- The Sonarr/Radarr webhook URLs carry a random token so other devices on
-  your network can't inject fake events; treat that URL like a password.
+Under **Settings → Security → Who needs to log in** you can choose:
+
+- **Always require login** (default).
+- **Not required on my local network** — like Sonarr's "Disabled for Local
+  Addresses". Requests straight from a private address (192.168.x.x,
+  10.x.x.x, 172.16–31.x.x, localhost) get in without a login. Anything that
+  arrives through a reverse proxy or tunnel (it has an `X-Forwarded-For`,
+  `Forwarded`, `X-Real-IP` or `CF-Connecting-IP` header) still has to log
+  in, even though the proxy itself is on your LAN.
+
+Not behind the login:
+
+- `/api/webhooks/sonarr` and `/api/webhooks/radarr` — Sonarr/Radarr can't
+  log in, so these check the random token in the URL instead. Treat those
+  URLs like a password.
+- `/api/health` — for Docker's health check; reports only status and
+  version.
+
+Other protections: failed logins are limited to 10 per 15 minutes per
+address; state-changing API calls need an `X-Requested-With: arr-digest`
+header, which blocks cross-site request forgery; and the live feed's
+WebSocket only opens with a single-use ticket.
+
+The login is a sensible baseline, not a hardened internet-facing service.
+For access from outside your home, a VPN (Tailscale, WireGuard) is the
+safer choice. If you do expose it, put it behind a reverse proxy with HTTPS
+(the session cookie is then marked `Secure` automatically) and, ideally,
+its own authentication (Authelia, Authentik).
+
+### Forgot your password
+
+Remove the login, then open the web UI and create a new one. Settings,
+destinations and history are kept.
+
+```bash
+docker exec arr-digest node server/dist/cli/reset-auth.js
+```
+
+When running from source instead: `npm run reset-auth`.
 
 ## License
 

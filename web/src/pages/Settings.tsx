@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { DiscordPreview } from "../components/DiscordPreview";
 import { Destinations } from "../components/Destinations";
+import { SecuritySettings } from "../components/SecuritySettings";
 import type {
   Destination,
   DigestRun,
@@ -113,13 +114,15 @@ const TABS = [
   { key: "destinations", label: "Destinations" },
   { key: "schedule", label: "Schedule" },
   { key: "content", label: "Content" },
+  { key: "security", label: "Security" },
   { key: "history", label: "History" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
 
 // Tabs whose sections are saved by the page-level "Save settings" button —
-// destinations save individually, and history has nothing to save.
+// destinations and security save individually, and history has nothing to
+// save.
 const TABS_WITH_SAVE: TabKey[] = ["all", "connection", "schedule", "content"];
 
 function TabPills({ active, onSelect }: { active: TabKey; onSelect: (key: TabKey) => void }) {
@@ -466,6 +469,8 @@ export function Settings() {
           {saved && <span className="text-sm text-addition">Saved.</span>}
         </div>
       )}
+
+      {show("security") && <SecuritySettings />}
 
       {show("history") && (
       <section className="mb-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">

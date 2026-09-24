@@ -2,6 +2,7 @@ import { and, eq, lt } from "drizzle-orm";
 import { Cron } from "croner";
 import { db } from "./db/client.js";
 import { mediaEvents } from "./db/schema.js";
+import { pruneExpiredSessions } from "./auth/service.js";
 
 const RETENTION_DAYS = 90;
 
@@ -23,6 +24,7 @@ function runAndLogPrune() {
   if (deleted > 0) {
     console.log(`[maintenance] pruned ${deleted} digested event(s) older than ${RETENTION_DAYS} days`);
   }
+  pruneExpiredSessions();
 }
 
 export function scheduleMaintenance() {

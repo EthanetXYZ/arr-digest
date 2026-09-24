@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../api";
+import { api, UNAUTHORIZED_EVENT } from "../api";
 import type { MediaEvent, WsMessage } from "../types";
 
 export type ConnectionState = "connecting" | "open" | "closed";
@@ -42,10 +42,30 @@ export function useLiveEvents(maxItems = 200) {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout>;
 
-    function connect() {
-      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      socket = new WebSocket(`${proto}//${window.location.host}/api/ws`);
+    function scheduleRetry() {
+      if (cancelled) return;
+      setStatus("closed");
+      const delay = Math.min(1000 * 2 ** retryRef.current, 15000);
+      retryRef.current += 1;
+      retryTimer = setTimeout(connect, delay);
+    }
+
+    async function connect() {
       setStatus("connecting");
+      // Browsers can't send custom headers on a WebSocket, so the socket
+      // authenticates with a short-lived ticket fetched the normal way.
+      let ticket: string;
+      try {
+        ticket = (await api.getWsTicket()).ticket;
+      } catch {
+        // Signed out: api.ts has already told AuthGate, which unmounts this.
+        scheduleRetry();
+        return;
+      }
+      if (cancelled) return;
+
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(`${proto}//${window.location.host}/api/ws?ticket=${encodeURIComponent(ticket)}`);
 
       socket.onopen = () => {
         retryRef.current = 0;
@@ -73,12 +93,10 @@ export function useLiveEvents(maxItems = 200) {
         }
       };
 
-      socket.onclose = () => {
-        if (cancelled) return;
-        setStatus("closed");
-        const delay = Math.min(1000 * 2 ** retryRef.current, 15000);
-        retryRef.current += 1;
-        retryTimer = setTimeout(connect, delay);
+      socket.onclose = (ev) => {
+        // 4001: server closed it because this session was logged out.
+        if (ev.code === 4001) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+        scheduleRetry();
       };
 
       socket.onerror = () => {

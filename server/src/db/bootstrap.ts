@@ -70,6 +70,22 @@ export function bootstrapDb() {
       watermark INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL
     );
+
+    -- Single login (id always 1). Kept out of settings so the password hash
+    -- can never leak through GET /api/settings.
+    CREATE TABLE IF NOT EXISTS auth (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      username TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'required',
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
   `);
 
   // CREATE TABLE IF NOT EXISTS above only shapes fresh installs; columns

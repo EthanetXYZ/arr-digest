@@ -48,6 +48,22 @@ export interface VersionInfo {
   builtAt: string | null;
 }
 
+export type AuthMode = "required" | "local_bypass";
+
+export type AuthStatus =
+  | { setupRequired: true; authenticated: false }
+  | { setupRequired: false; authenticated: false }
+  | {
+      setupRequired: false;
+      authenticated: true;
+      // Let in by the local-network rule rather than a login.
+      bypassed: boolean;
+      username: string;
+      mode: AuthMode;
+      // This browser is connecting directly from a LAN address.
+      localNetwork: boolean;
+    };
+
 export interface DiscordEmbed {
   title?: string;
   description?: string;

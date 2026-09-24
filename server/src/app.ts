@@ -8,16 +8,18 @@ import { eventsRoutes } from "./api/events.routes.js";
 import { systemRoutes } from "./api/system.routes.js";
 import { destinationsRoutes } from "./api/destinations.routes.js";
 import { registerClient } from "./realtime/ws.js";
+import { registerAuth } from "./auth/routes.js";
 import { getPendingDigestEvents } from "./webhooks/events-service.js";
 
-export async function buildApp() {
-  const app = Fastify({ logger: true });
+export async function buildApp({ logger = true }: { logger?: boolean } = {}) {
+  const app = Fastify({ logger });
 
   await app.register(fastifyWebsocket);
+  registerAuth(app);
 
   app.register(async (instance) => {
-    instance.get("/api/ws", { websocket: true }, (socket) => {
-      registerClient(socket);
+    instance.get("/api/ws", { websocket: true }, (socket, req) => {
+      registerClient(socket, req.auth?.sessionHash ?? null);
       // Newest first, matching how new "event" broadcasts get prepended —
       // and only what's still pending, since already-digested items would
       // just pile up as noise in a feed meant to show what's coming next.

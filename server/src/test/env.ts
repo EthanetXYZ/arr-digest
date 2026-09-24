@@ -7,6 +7,8 @@ import path from "node:path";
 // write the real dev database in server/data.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "arr-digest-test-"));
 process.env.DATA_DIR = dir;
+// buildApp() serves the web build from here; tests don't need a real one.
+process.env.WEB_DIST = dir;
 
 process.on("exit", () => {
   try {
