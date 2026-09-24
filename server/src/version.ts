@@ -3,11 +3,21 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 
 export interface VersionInfo {
+  version: string;
   commit: string;
   builtAt: string | null;
 }
 
 let cached: VersionInfo | null = null;
+
+// server/package.json sits one level above both src/ (dev) and dist/ (Docker).
+function packageVersion(): string {
+  try {
+    return JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
 
 // In Docker this reads the version.json the build stamped with the actual
 // commit that was built (see Dockerfile) — the only reliable way to tell
@@ -24,7 +34,7 @@ export function getVersionInfo(): VersionInfo {
     try {
       const parsed = JSON.parse(fs.readFileSync(candidate, "utf8"));
       if (parsed.commit) {
-        cached = { commit: parsed.commit, builtAt: parsed.builtAt ?? null };
+        cached = { version: packageVersion(), commit: parsed.commit, builtAt: parsed.builtAt ?? null };
         return cached;
       }
     } catch {
@@ -39,10 +49,10 @@ export function getVersionInfo(): VersionInfo {
     })
       .toString()
       .trim();
-    cached = { commit: `${commit}-dev`, builtAt: null };
+    cached = { version: packageVersion(), commit: `${commit}-dev`, builtAt: null };
     return cached;
   } catch {
-    cached = { commit: "unknown", builtAt: null };
+    cached = { version: packageVersion(), commit: "unknown", builtAt: null };
     return cached;
   }
 }

@@ -37,7 +37,7 @@ export function Nav() {
             title={buildTooltip(version)}
             className="ml-auto rounded border border-slate-800 px-1.5 py-0.5 font-mono text-xs text-slate-500"
           >
-            {version.commit}
+            v{version.version} · {version.commit}
           </span>
         )}
       </div>

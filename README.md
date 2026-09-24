@@ -9,6 +9,8 @@ are automatically suppressed so they don't also show up as a "removed" item —
 only genuine deletions (manual, missing from disk, etc.) are reported as
 removals.
 
+> **No login — keep it on your home network.** See [Security](#security).
+
 ## How it works
 
 - Sonarr/Radarr are configured with a **Webhook** connection pointing at this
@@ -183,3 +185,22 @@ display, and whether to skip sending when there's nothing to report.
 The home page shows events as they arrive from Sonarr/Radarr in real time,
 with a running count of what's queued for the next digest, and a "Send
 digest now" button to trigger an out-of-schedule send.
+
+## Security
+
+**There is no login.** The app is meant to run on a trusted home network.
+Anyone who can reach the web UI can see and change every setting —
+including your Discord webhook URLs, which on their own are enough to post
+to your channels — and can trigger sends.
+
+- Keep it on your LAN (or a VPN such as Tailscale/WireGuard). Don't
+  port-forward it to the internet.
+- If you need remote access, put it behind a reverse proxy that adds
+  authentication (e.g. Authelia or Authentik in front of Nginx Proxy
+  Manager, SWAG, Caddy or Traefik).
+- The Sonarr/Radarr webhook URLs carry a random token so other devices on
+  your network can't inject fake events; treat that URL like a password.
+
+## License
+
+[MIT](LICENSE)
