@@ -11,7 +11,7 @@ export function bootstrapDb() {
       timezone TEXT NOT NULL DEFAULT 'UTC',
       digest_times TEXT NOT NULL DEFAULT '["09:00"]',
       digest_enabled INTEGER NOT NULL DEFAULT 1,
-      digest_title TEXT NOT NULL DEFAULT 'Library Digest',
+      digest_title TEXT NOT NULL DEFAULT '{added_movies:movie, added_episodes:episode} {was|were} added',
       group_by_type INTEGER NOT NULL DEFAULT 1,
       show_poster INTEGER NOT NULL DEFAULT 1,
       compact_mode INTEGER NOT NULL DEFAULT 1,

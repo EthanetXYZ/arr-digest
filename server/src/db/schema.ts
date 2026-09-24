@@ -8,7 +8,7 @@ export const settings = sqliteTable("settings", {
   // JSON array of "HH:mm" strings, e.g. ["09:00", "20:00"]
   digestTimes: text("digest_times").notNull().default("[\"09:00\"]"),
   digestEnabled: integer("digest_enabled", { mode: "boolean" }).notNull().default(true),
-  digestTitle: text("digest_title").notNull().default("Library Digest"),
+  digestTitle: text("digest_title").notNull().default("{added_movies:movie, added_episodes:episode} {was|were} added"),
   groupByType: integer("group_by_type", { mode: "boolean" }).notNull().default(true),
   showPoster: integer("show_poster", { mode: "boolean" }).notNull().default(true),
   compactMode: integer("compact_mode", { mode: "boolean" }).notNull().default(true),

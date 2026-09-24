@@ -242,8 +242,11 @@ destination's digest counts only what it received):
   left off (the message still goes out if it has other content — e.g.
   removals under an "added" title).
 
-Use the `added_` forms for titles about additions — plain `{movies}`
-counts removed and upgraded movies too. A season batch counts as one item
+The default title is `{added_movies:movie, added_episodes:episode}
+{was|were} added` — "2 movies & 7 episodes were added", "1 episode was
+added", or no title when nothing was added. Use the `added_` forms for
+titles about additions — plain `{movies}` counts removed and upgraded
+movies too. A season batch counts as one item
 everywhere — in the title, the section headers, and the Live Feed's
 pending count.
 

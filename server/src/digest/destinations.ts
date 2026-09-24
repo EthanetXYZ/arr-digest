@@ -83,7 +83,7 @@ export interface FormatOverrides {
 }
 
 // The settings a message to `dest` is rendered with: its own mention, and no
-// digest title for instant destinations — "Library Digest" heads a scheduled
+// digest title for instant destinations — the title heads a scheduled
 // summary, not a one-off push.
 export function renderSettingsFor(dest: Destination | undefined, overrides: FormatOverrides = {}): Settings {
   return {

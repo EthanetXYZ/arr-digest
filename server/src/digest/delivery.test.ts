@@ -141,7 +141,8 @@ describe("scheduled digest", () => {
     dest("pinged", discord.url("pinged"), { mentionContent: "<@&42>" });
     event({});
     await runDigest();
-    assert.equal(discord.to("pinged")[0].body.content, "<@&42> **Library Digest**");
+    // Also exercises a fresh install's default title end to end.
+    assert.equal(discord.to("pinged")[0].body.content, "<@&42> **1 movie was added**");
   });
 
   it("on partial failure, retries only the broken destination — the working one gets no duplicates", async () => {
