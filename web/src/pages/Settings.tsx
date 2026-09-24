@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { DiscordPreview } from "../components/DiscordPreview";
-import type { DigestRun, DiscordMessage, NetworkInfo, PreviewOverrides, Settings as SettingsType } from "../types";
+import { Destinations } from "../components/Destinations";
+import type {
+  Destination,
+  DigestRun,
+  DiscordMessage,
+  NetworkInfo,
+  PreviewOverrides,
+  Settings as SettingsType,
+} from "../types";
 
 function useTimezones(): string[] {
   let zones: string[];
@@ -98,7 +107,58 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
+const TABS = [
+  { key: "all", label: "All" },
+  { key: "connection", label: "Connection" },
+  { key: "destinations", label: "Destinations" },
+  { key: "schedule", label: "Schedule" },
+  { key: "content", label: "Content" },
+  { key: "history", label: "History" },
+] as const;
+
+type TabKey = (typeof TABS)[number]["key"];
+
+// Tabs whose sections are saved by the page-level "Save settings" button —
+// destinations save individually, and history has nothing to save.
+const TABS_WITH_SAVE: TabKey[] = ["all", "connection", "schedule", "content"];
+
+function TabPills({ active, onSelect }: { active: TabKey; onSelect: (key: TabKey) => void }) {
+  return (
+    <div className="sticky top-0 z-10 -mx-4 mb-6 bg-slate-950/90 px-4 py-3 backdrop-blur">
+      {/* One swipeable row on phones (a wrapped two-row sticky bar eats too
+          much of a small screen); wraps normally from sm: up. */}
+      <div
+        role="tablist"
+        className="flex gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-visible"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            role="tab"
+            aria-selected={active === tab.key}
+            onClick={() => onSelect(tab.key)}
+            className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1 text-sm font-medium transition ${
+              active === tab.key
+                ? "bg-upgrade text-white shadow-sm shadow-upgrade/30"
+                : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Settings() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const activeTab: TabKey = TABS.some((t) => t.key === requestedTab) ? (requestedTab as TabKey) : "all";
+  const show = (tab: TabKey) => activeTab === "all" || activeTab === tab;
+  const selectTab = (tab: TabKey) => setSearchParams(tab === "all" ? {} : { tab }, { replace: true });
+
   const [settings, setSettings] = useState<SettingsType | null>(null);
   const [history, setHistory] = useState<DigestRun[]>([]);
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
@@ -106,32 +166,41 @@ export function Settings() {
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState<DiscordMessage[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [sendingTest, setSendingTest] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
+  const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [previewDestinationId, setPreviewDestinationId] = useState<number | null>(null);
   const timezones = useTimezones();
 
   useEffect(() => {
     api.getSettings().then(setSettings);
     api.getDigestHistory().then(setHistory);
     api.getNetworkInfo().then(setNetworkInfo).catch(() => {});
+    api.getDestinations().then(setDestinations).catch(() => {});
   }, []);
 
-  // Live preview reflects unsaved edits (title, grouping, compact/poster
-  // toggles, mention) against fixed sample data, debounced so typing in the
-  // Title field doesn't fire a request per keystroke.
+  // A deleted destination can't stay selected in the preview.
   useEffect(() => {
-    if (!settings) return;
-    const overrides: PreviewOverrides = {
-      digestTitle: settings.digestTitle,
-      groupByType: settings.groupByType,
-      showPoster: settings.showPoster,
-      compactMode: settings.compactMode,
-      mentionContent: settings.mentionContent,
-    };
+    if (previewDestinationId != null && !destinations.some((d) => d.id === previewDestinationId)) {
+      setPreviewDestinationId(null);
+    }
+  }, [destinations, previewDestinationId]);
+
+  const formatOverrides: PreviewOverrides | null = settings && {
+    digestTitle: settings.digestTitle,
+    groupByType: settings.groupByType,
+    showPoster: settings.showPoster,
+    compactMode: settings.compactMode,
+  };
+
+  // Live preview reflects unsaved edits (title, grouping, compact/poster
+  // toggles) against fixed sample data, debounced so typing in the Title
+  // field doesn't fire a request per keystroke. Re-renders when saved
+  // destinations change too, since their filters and mention shape it.
+  useEffect(() => {
+    if (!formatOverrides) return;
     setPreviewLoading(true);
     const timer = setTimeout(() => {
       api
-        .renderDigestPreview(overrides, true)
+        .renderDigestPreview(formatOverrides, previewDestinationId ?? undefined)
         .then((res) => setPreview(res.messages))
         .catch(() => {})
         .finally(() => setPreviewLoading(false));
@@ -142,10 +211,11 @@ export function Settings() {
     settings?.groupByType,
     settings?.showPoster,
     settings?.compactMode,
-    settings?.mentionContent,
+    previewDestinationId,
+    destinations,
   ]);
 
-  if (!settings) {
+  if (!settings || !formatOverrides) {
     return <div className="mx-auto max-w-2xl px-4 py-6 text-slate-400">Loading…</div>;
   }
 
@@ -167,26 +237,6 @@ export function Settings() {
     }
   }
 
-  async function sendTest() {
-    if (!settings) return;
-    setSendingTest(true);
-    setTestResult(null);
-    try {
-      const res = await api.sendTestDigest({
-        digestTitle: settings.digestTitle,
-        groupByType: settings.groupByType,
-        showPoster: settings.showPoster,
-        compactMode: settings.compactMode,
-        mentionContent: settings.mentionContent,
-      });
-      setTestResult(res.ok ? "Sent — check your Discord channel." : (res.error ?? "Failed to send."));
-    } catch (err) {
-      setTestResult(err instanceof Error ? err.message : "Failed to send.");
-    } finally {
-      setSendingTest(false);
-    }
-  }
-
   const origin = settings.publicUrl?.trim() || window.location.origin;
   const sonarrUrl = `${origin}/api/webhooks/sonarr?token=${settings.webhookToken}`;
   const radarrUrl = `${origin}/api/webhooks/radarr?token=${settings.webhookToken}`;
@@ -198,7 +248,10 @@ export function Settings() {
   );
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
+    <div className="mx-auto max-w-2xl px-4 pb-6">
+      <TabPills active={activeTab} onSelect={selectTab} />
+
+      {show("connection") && (
       <section className="mb-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
         <h2 className="mb-1 text-lg font-semibold text-white">Connect Sonarr / Radarr</h2>
         <p className="mb-2 text-sm text-slate-400">
@@ -257,25 +310,17 @@ export function Settings() {
         <CopyField label="Sonarr webhook URL" value={sonarrUrl} />
         <CopyField label="Radarr webhook URL" value={radarrUrl} />
       </section>
+      )}
 
-      <section className="mb-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-        <h2 className="mb-3 text-lg font-semibold text-white">Discord</h2>
-        <label className="mb-1 block text-sm font-medium text-slate-200">Webhook URL</label>
-        <input
-          value={settings.discordWebhookUrl ?? ""}
-          onChange={(e) => patch({ discordWebhookUrl: e.target.value })}
-          placeholder="https://discord.com/api/webhooks/..."
-          className="mb-3 w-full rounded-md border border-slate-800 bg-slate-900 px-2 py-1.5 text-sm text-slate-200"
+      {show("destinations") && (
+        <Destinations
+          destinations={destinations}
+          onChange={setDestinations}
+          formatOverrides={formatOverrides}
         />
-        <label className="mb-1 block text-sm font-medium text-slate-200">Mention (optional)</label>
-        <input
-          value={settings.mentionContent ?? ""}
-          onChange={(e) => patch({ mentionContent: e.target.value })}
-          placeholder="@here, @everyone, or <@&roleId>"
-          className="w-full rounded-md border border-slate-800 bg-slate-900 px-2 py-1.5 text-sm text-slate-200"
-        />
-      </section>
+      )}
 
+      {show("schedule") && (
       <section className="mb-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
         <h2 className="mb-3 text-lg font-semibold text-white">Schedule</h2>
         <Toggle
@@ -329,7 +374,9 @@ export function Settings() {
           </select>
         </div>
       </section>
+      )}
 
+      {show("content") && (
       <section className="mb-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
         <h2 className="mb-3 text-lg font-semibold text-white">Digest content</h2>
         <label className="mb-1 block text-sm font-medium text-slate-200">Title</label>
@@ -362,7 +409,9 @@ export function Settings() {
           onChange={(v) => patch({ skipIfEmpty: v })}
         />
       </section>
+      )}
 
+      {show("content") && (
       <section className="mb-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
@@ -374,36 +423,46 @@ export function Settings() {
           {previewLoading && <span className="text-xs text-slate-500">Updating…</span>}
         </div>
 
+        <label className="mb-3 flex items-center gap-2 text-sm text-slate-400">
+          Showing
+          <select
+            value={previewDestinationId ?? ""}
+            onChange={(e) => setPreviewDestinationId(e.target.value ? Number(e.target.value) : null)}
+            className="rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-sm text-slate-200"
+          >
+            <option value="">All events</option>
+            {destinations.map((d) => (
+              <option key={d.id} value={d.id}>
+                What "{d.name}" receives
+              </option>
+            ))}
+          </select>
+        </label>
+
         <DiscordPreview messages={preview} />
 
-        <div className="mt-4 flex items-center gap-3 border-t border-slate-800 pt-4">
-          <button
-            onClick={sendTest}
-            disabled={sendingTest || !settings.discordWebhookUrl}
-            title={settings.discordWebhookUrl ? undefined : "Set a Discord webhook URL first"}
-            className="rounded-md bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-          >
-            {sendingTest ? "Sending…" : "Send test digest to Discord"}
-          </button>
-          {testResult && <span className="text-sm text-slate-400">{testResult}</span>}
-        </div>
-        <p className="mt-2 text-xs text-slate-500">
-          Posts the same sample data shown above to your real Discord channel using the settings above
-          (saved or not) — doesn't touch your pending events or digest history.
+        <p className="mt-3 text-xs text-slate-500">
+          To see a real message in Discord, use <span className="text-slate-300">Send test</span> on a
+          destination above — it posts this sample data (filtered to that destination) using the content
+          settings on this page, saved or not, and doesn't touch your pending events or digest history.
         </p>
       </section>
+      )}
 
-      <div className="mb-8 flex items-center gap-3">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="rounded-md bg-upgrade px-4 py-2 text-sm font-medium text-white hover:bg-upgrade/80 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Save settings"}
-        </button>
-        {saved && <span className="text-sm text-addition">Saved.</span>}
-      </div>
+      {TABS_WITH_SAVE.includes(activeTab) && (
+        <div className="mb-8 flex items-center gap-3">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="rounded-md bg-upgrade px-4 py-2 text-sm font-medium text-white hover:bg-upgrade/80 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save settings"}
+          </button>
+          {saved && <span className="text-sm text-addition">Saved.</span>}
+        </div>
+      )}
 
+      {show("history") && (
       <section className="mb-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
         <h2 className="mb-3 text-lg font-semibold text-white">Digest history</h2>
         {history.length === 0 ? (
@@ -433,6 +492,7 @@ export function Settings() {
           </ul>
         )}
       </section>
+      )}
     </div>
   );
 }

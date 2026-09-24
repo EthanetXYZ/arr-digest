@@ -16,8 +16,10 @@ removals.
 - Events are normalized, stored in SQLite, pushed to any open **Live Feed**
   page over WebSocket, and queued for the next digest.
 - On a schedule you configure (one or more times a day, in your timezone),
-  the queued events are grouped into Discord embeds and sent to a Discord
-  webhook. You can also trigger a send immediately from the Live Feed page.
+  the queued events are grouped into Discord embeds and sent to one or more
+  Discord webhooks ("destinations"), each receiving only the event types it's
+  subscribed to. You can also trigger a send immediately from the Live Feed
+  page.
 
 ## Stack
 
@@ -39,6 +41,13 @@ This runs the Fastify API on `:8080` and the Vite dev server (with API/WS
 proxying) on `:5173`. Open `http://localhost:5173`.
 
 The SQLite database is created at `server/data/digest.sqlite` on first run.
+
+Run the tests with `npm test`. They cover webhook normalization (including
+upgrade-delete suppression), message building and season grouping, and
+delivery routing/failure handling against a throwaway database and a mock
+Discord endpoint — they never touch `server/data` or real Discord. The
+Docker build runs them too, so a failing test stops the image from being
+built.
 
 ## Running in Docker
 
@@ -92,7 +101,7 @@ Environment variables (all optional):
 | `DATA_DIR` | `/app/data`       | Where the SQLite file is stored           |
 | `TZ`       | container default | Host timezone (digest scheduling uses the timezone you set in-app, not this) |
 
-All other configuration — Discord webhook URL, digest schedule, display
+All other configuration — Discord destinations, digest schedule, display
 options — is done through the web UI, not environment variables, so it can
 be changed without restarting the container.
 
@@ -129,11 +138,31 @@ In each app: **Settings → Connect → Add → Webhook**
 Use the **Test** button in Sonarr/Radarr to confirm connectivity — it should
 return success immediately without creating any events.
 
-### 3. Add a Discord webhook
+### 3. Add Discord destinations
 
 In Discord: **Server Settings → Integrations → Webhooks → New Webhook**,
-pick the channel, copy the webhook URL, and paste it into this app's
-Settings page.
+pick the channel, and copy the webhook URL. In this app's Settings page,
+under **Discord destinations**, click **Add destination** and paste it in.
+
+Each destination picks which events it receives (Added / Upgraded /
+Removed) and which media (Movies / TV), plus an optional mention. To send
+upgrades to one channel and removals to another, create one destination
+per channel. Event types no enabled destination picks up aren't sent at
+all, which is also how you turn a type off entirely. Use **Send test** on
+a destination to post sample data to that channel.
+
+Each destination's **Delivery** is either **Scheduled digest** (sent at the
+digest times) or **Instant** (pushed as events arrive). Instant waits until
+events have been quiet for 20 seconds (2 minutes at most) before sending,
+because a season import arrives as one webhook per episode — this way it
+still lands as a single "S01E01–E10" message rather than ten. An event that
+only instant destinations want leaves the Live Feed once pushed, since it
+won't be in the next digest.
+
+If one destination fails during a digest but others succeed, the items
+still count as sent (so working channels don't get duplicates on the next
+run) and the failure shows as a banner on the Live Feed. If every
+destination fails, the items stay queued and are retried next time.
 
 ### 4. Configure the schedule and display options
 

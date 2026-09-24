@@ -42,6 +42,25 @@ export const mediaEvents = sqliteTable("media_events", {
   createdAt: integer("created_at").notNull(),
 });
 
+// A Discord webhook plus which slice of events it receives — lets e.g.
+// removals go to one channel and upgrades to another.
+export const destinations = sqliteTable("destinations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  webhookUrl: text("webhook_url").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  // "digest": sent in the scheduled digest. "instant": pushed shortly after
+  // each event arrives (see digest/instant.ts).
+  mode: text("mode").notNull().default("digest"),
+  includeAdditions: integer("include_additions", { mode: "boolean" }).notNull().default(true),
+  includeUpgrades: integer("include_upgrades", { mode: "boolean" }).notNull().default(true),
+  includeRemovals: integer("include_removals", { mode: "boolean" }).notNull().default(true),
+  includeMovies: integer("include_movies", { mode: "boolean" }).notNull().default(true),
+  includeSeries: integer("include_series", { mode: "boolean" }).notNull().default(true),
+  mentionContent: text("mention_content"),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const digestRuns = sqliteTable("digest_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   ranAt: integer("ran_at").notNull(),

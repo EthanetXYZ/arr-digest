@@ -52,6 +52,21 @@ export function bootstrapDb() {
       status TEXT NOT NULL,
       error TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS destinations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      webhook_url TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      mode TEXT NOT NULL DEFAULT 'digest',
+      include_additions INTEGER NOT NULL DEFAULT 1,
+      include_upgrades INTEGER NOT NULL DEFAULT 1,
+      include_removals INTEGER NOT NULL DEFAULT 1,
+      include_movies INTEGER NOT NULL DEFAULT 1,
+      include_series INTEGER NOT NULL DEFAULT 1,
+      mention_content TEXT,
+      created_at INTEGER NOT NULL
+    );
   `);
 
   // Existing databases predate the public_url column; CREATE TABLE IF NOT
@@ -61,10 +76,31 @@ export function bootstrapDb() {
     sqlite.exec("ALTER TABLE settings ADD COLUMN public_url TEXT");
   }
 
+  // Same story for destinations.mode, added after the destinations table.
+  const destColumns = sqlite.prepare("PRAGMA table_info(destinations)").all() as { name: string }[];
+  if (!destColumns.some((c) => c.name === "mode")) {
+    sqlite.exec("ALTER TABLE destinations ADD COLUMN mode TEXT NOT NULL DEFAULT 'digest'");
+  }
+
   const row = sqlite.prepare("SELECT id FROM settings WHERE id = 1").get();
   if (!row) {
     sqlite
       .prepare("INSERT INTO settings (id, webhook_token) VALUES (1, ?)")
       .run(crypto.randomBytes(16).toString("hex"));
+  }
+
+  // The single settings.discord_webhook_url predates destinations. Move it
+  // into a catch-all "Main" destination once, then clear it — clearing is
+  // what stops this from re-creating "Main" if the user later deletes it.
+  const legacy = sqlite
+    .prepare("SELECT discord_webhook_url AS url, mention_content AS mention FROM settings WHERE id = 1")
+    .get() as { url: string | null; mention: string | null };
+  if (legacy.url?.trim()) {
+    sqlite
+      .prepare(
+        "INSERT INTO destinations (name, webhook_url, mention_content, created_at) VALUES ('Main', ?, ?, ?)",
+      )
+      .run(legacy.url.trim(), legacy.mention, Date.now());
+    sqlite.exec("UPDATE settings SET discord_webhook_url = NULL, mention_content = NULL WHERE id = 1");
   }
 }

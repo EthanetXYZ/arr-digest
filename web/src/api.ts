@@ -1,4 +1,6 @@
 import type {
+  Destination,
+  DestinationInput,
   DigestRun,
   DiscordMessage,
   MediaEvent,
@@ -35,16 +37,24 @@ export const api = {
   removeEvent: (id: number) =>
     request<{ ok: boolean; error?: string }>(`/api/events/${id}`, { method: "DELETE" }),
   getDigestHistory: () => request<DigestRun[]>("/api/digest/history"),
-  runDigestNow: () => request<{ ok: boolean; error?: string }>("/api/digest/run-now", { method: "POST" }),
+  runDigestNow: () =>
+    request<{ ok: boolean; error?: string; warning?: string }>("/api/digest/run-now", { method: "POST" }),
   getNetworkInfo: () => request<NetworkInfo>("/api/system/network-info"),
   getVersion: () => request<VersionInfo>("/api/version"),
-  renderDigestPreview: (settings: PreviewOverrides, sample = true) =>
+  renderDigestPreview: (settings: PreviewOverrides, destinationId?: number) =>
     request<{ messages: DiscordMessage[] }>("/api/digest/render", {
       method: "POST",
-      body: JSON.stringify({ settings, sample }),
+      body: JSON.stringify({ settings, sample: true, destinationId }),
     }),
-  sendTestDigest: (settings: PreviewOverrides) =>
-    request<{ ok: boolean; error?: string }>("/api/digest/send-test", {
+  getDestinations: () => request<Destination[]>("/api/destinations"),
+  createDestination: (input: DestinationInput) =>
+    request<Destination>("/api/destinations", { method: "POST", body: JSON.stringify(input) }),
+  updateDestination: (id: number, input: DestinationInput) =>
+    request<Destination>(`/api/destinations/${id}`, { method: "PUT", body: JSON.stringify(input) }),
+  deleteDestination: (id: number) =>
+    request<{ ok: boolean }>(`/api/destinations/${id}`, { method: "DELETE" }),
+  testDestination: (id: number, settings: PreviewOverrides) =>
+    request<{ ok: boolean; error?: string }>(`/api/destinations/${id}/test`, {
       method: "POST",
       body: JSON.stringify({ settings }),
     }),

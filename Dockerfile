@@ -17,6 +17,9 @@ COPY web/package.json web/package.json
 RUN npm install
 
 COPY . .
+# A failing test stops the image build, so a broken change never replaces
+# a working container -- the previous image keeps running.
+RUN npm test
 RUN npm run build
 
 # Bakes in what was actually built, so it's possible to tell from the

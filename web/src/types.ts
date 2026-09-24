@@ -62,8 +62,28 @@ export interface DiscordMessage {
 
 export type PreviewOverrides = Pick<
   Settings,
-  "digestTitle" | "groupByType" | "showPoster" | "compactMode" | "mentionContent"
+  "digestTitle" | "groupByType" | "showPoster" | "compactMode"
 >;
+
+export type DeliveryMode = "digest" | "instant";
+
+export interface DestinationInput {
+  name: string;
+  webhookUrl: string;
+  enabled: boolean;
+  mode: DeliveryMode;
+  includeAdditions: boolean;
+  includeUpgrades: boolean;
+  includeRemovals: boolean;
+  includeMovies: boolean;
+  includeSeries: boolean;
+  mentionContent: string | null;
+}
+
+export interface Destination extends DestinationInput {
+  id: number;
+  createdAt: number;
+}
 
 export interface DigestRun {
   id: number;

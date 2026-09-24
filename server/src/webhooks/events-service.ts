@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { mediaEvents } from "../db/schema.js";
 import { broadcast } from "../realtime/ws.js";
@@ -60,6 +60,16 @@ export function removePendingEvent(id: number): boolean {
     .where(and(eq(mediaEvents.id, id), eq(mediaEvents.digested, false)))
     .run();
   return result.changes > 0;
+}
+
+export function existingEventIds(ids: number[]): Set<number> {
+  if (ids.length === 0) return new Set();
+  const rows = db
+    .select({ id: mediaEvents.id })
+    .from(mediaEvents)
+    .where(inArray(mediaEvents.id, ids))
+    .all();
+  return new Set(rows.map((r) => r.id));
 }
 
 export function markEventsDigested(ids: number[]) {

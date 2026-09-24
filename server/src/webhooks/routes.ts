@@ -3,6 +3,13 @@ import { getSettings } from "../config/settings.js";
 import { normalizeRadarrEvent, normalizeSonarrEvent } from "./normalize.js";
 import type { RadarrWebhookPayload, SonarrWebhookPayload } from "./types.js";
 import { recordEvent } from "./events-service.js";
+import { queueInstant } from "../digest/instant.js";
+import type { NormalizedEvent } from "./normalize.js";
+
+function ingest(normalized: NormalizedEvent | null) {
+  if (!normalized) return;
+  queueInstant(recordEvent(normalized));
+}
 
 function checkToken(token: unknown): boolean {
   const expected = getSettings().webhookToken;
@@ -22,8 +29,7 @@ export async function webhookRoutes(app: FastifyInstance) {
         return reply.code(200).send({ ok: true });
       }
 
-      const normalized = normalizeSonarrEvent(payload);
-      if (normalized) recordEvent(normalized);
+      ingest(normalizeSonarrEvent(payload));
 
       return reply.code(200).send({ ok: true });
     },
@@ -41,8 +47,7 @@ export async function webhookRoutes(app: FastifyInstance) {
         return reply.code(200).send({ ok: true });
       }
 
-      const normalized = normalizeRadarrEvent(payload);
-      if (normalized) recordEvent(normalized);
+      ingest(normalizeRadarrEvent(payload));
 
       return reply.code(200).send({ ok: true });
     },

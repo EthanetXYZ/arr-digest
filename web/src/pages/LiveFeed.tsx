@@ -53,7 +53,9 @@ export function LiveFeed() {
     setSendResult(null);
     try {
       const res = await api.runDigestNow();
-      setSendResult(res.ok ? "Digest sent." : res.error ?? "Failed to send.");
+      setSendResult(
+        !res.ok ? (res.error ?? "Failed to send.") : res.warning ? `Sent, but: ${res.warning}` : "Digest sent.",
+      );
     } catch (err) {
       setSendResult(err instanceof Error ? err.message : "Failed to send.");
     } finally {
@@ -67,7 +69,7 @@ export function LiveFeed() {
         <div className="mb-4 flex items-start gap-3 rounded-lg border border-removal/30 bg-removal/10 p-3 text-sm">
           <span className="mt-0.5 text-removal">⚠</span>
           <div className="flex-1">
-            <span className="font-medium text-removal">Last digest failed</span>
+            <span className="font-medium text-removal">Last send to Discord failed</span>
             <span className="text-slate-400"> — {timeAgo(lastRun!.ranAt)}</span>
             <div className="mt-0.5 text-slate-400">{lastRun!.error}</div>
           </div>

@@ -6,6 +6,7 @@ import { webhookRoutes } from "./webhooks/routes.js";
 import { settingsRoutes } from "./api/settings.routes.js";
 import { eventsRoutes } from "./api/events.routes.js";
 import { systemRoutes } from "./api/system.routes.js";
+import { destinationsRoutes } from "./api/destinations.routes.js";
 import { registerClient } from "./realtime/ws.js";
 import { getPendingDigestEvents } from "./webhooks/events-service.js";
 
@@ -29,6 +30,7 @@ export async function buildApp() {
   await app.register(settingsRoutes);
   await app.register(eventsRoutes);
   await app.register(systemRoutes);
+  await app.register(destinationsRoutes);
 
   // wildcard defaults to true: it serves files via live per-request lookups
   // rather than pre-globbing the directory once at startup, so a rebuild

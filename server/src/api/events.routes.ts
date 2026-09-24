@@ -45,8 +45,8 @@ export async function eventsRoutes(app: FastifyInstance) {
 
   app.post("/api/digest/run-now", async (_req, reply) => {
     try {
-      await runDigest();
-      return { ok: true };
+      const { warning } = await runDigest();
+      return { ok: true, warning };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       return reply.code(500).send({ ok: false, error });
@@ -55,23 +55,25 @@ export async function eventsRoutes(app: FastifyInstance) {
 
   // Renders what a digest would look like without touching stored events —
   // used for the live preview in Settings (draft, unsaved settings) and can
-  // optionally render sample data instead of the real pending queue.
-  app.post<{ Body: { settings?: PreviewOverrides; sample?: boolean } }>(
+  // optionally render sample data instead of the real pending queue. With a
+  // destinationId, shows only what that destination would receive.
+  app.post<{ Body: { settings?: PreviewOverrides; sample?: boolean; destinationId?: number } }>(
     "/api/digest/render",
     async (req) => {
-      const { settings, sample } = req.body ?? {};
-      return renderPreview(settings ?? {}, sample ?? true);
+      const { settings, sample, destinationId } = req.body ?? {};
+      return renderPreview(settings ?? {}, sample ?? true, destinationId);
     },
   );
 
-  // Sends one real Discord message built from fixed sample data, so the user
-  // can see an actual rendered message in their channel. Never touches the
-  // real event queue or digest history.
-  app.post<{ Body: { settings?: PreviewOverrides } }>(
-    "/api/digest/send-test",
+  // Sends one real Discord message built from fixed sample data (filtered to
+  // what the destination subscribes to), so the user can see an actual
+  // rendered message in that channel. Never touches the real event queue
+  // or digest history.
+  app.post<{ Params: { id: string }; Body: { settings?: PreviewOverrides } }>(
+    "/api/destinations/:id/test",
     async (req, reply) => {
       try {
-        await sendTestDigest(req.body?.settings ?? {});
+        await sendTestDigest(Number(req.params.id), req.body?.settings ?? {});
         return { ok: true };
       } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
