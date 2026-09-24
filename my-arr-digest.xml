@@ -1,21 +1,21 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>arr-digest</Name>
-  <Repository>arr-digest:latest</Repository>
-  <Registry>https://github.com/EthanetXYZ/arr-digest</Registry>
+  <Repository>ghcr.io/ethanetxyz/arr-digest:latest</Repository>
+  <Registry>https://github.com/EthanetXYZ/arr-digest/pkgs/container/arr-digest</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
   <Support>https://github.com/EthanetXYZ/arr-digest/issues</Support>
   <Project>https://github.com/EthanetXYZ/arr-digest</Project>
-  <Overview>Self-hosted digest bot for Sonarr and Radarr. Listens for their webhook notifications, shows additions/upgrades/removals live in a web UI, and posts a scheduled summary to Discord. Open the web UI after starting the container to create your login, then configure the digest schedule, Discord destinations, and display options there. Forgot the password? Run: docker exec arr-digest node server/dist/cli/reset-auth.js
+  <Overview>Self-hosted digest bot for Sonarr and Radarr. Listens for their webhook notifications, shows additions/upgrades/removals live in a web UI, and posts summaries to Discord, on a schedule or instantly, to one or more channels. Upgrades are reported as upgrades, never as a removal plus an addition.
 
-This image is not published to a registry — build it locally on the Unraid host first (see README.md's "Running on Unraid" section), then Unraid will use that local `arr-digest:latest` image instead of trying to pull one. If you skip the build step, container start will fail with "no such image".</Overview>
+After starting the container, open the WebUI and create your login straight away, then follow the Settings page to connect Sonarr/Radarr and add Discord destinations. Forgot the password? Run: docker exec arr-digest node server/dist/cli/reset-auth.js</Overview>
   <Category>MediaApp:Other Tools:</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/EthanetXYZ/arr-digest/main/my-arr-digest.xml</TemplateURL>
-  <Icon/>
+  <Icon>https://raw.githubusercontent.com/EthanetXYZ/arr-digest/main/web/public/icon-512.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>

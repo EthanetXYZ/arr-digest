@@ -1,7 +1,9 @@
 services:
   arr-digest:
-    build: .
-    # image: ghcr.io/yourname/arr-digest:latest
+    image: ghcr.io/ethanetxyz/arr-digest:latest
+    # To build from this checkout instead of pulling, comment out `image`
+    # above, uncomment `build`, and run `docker compose up -d --build`.
+    # build: .
     container_name: arr-digest
     restart: unless-stopped
     ports:

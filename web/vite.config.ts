@@ -9,7 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg"],
+      includeAssets: ["favicon.svg", "icon-192.png", "icon-512.png"],
       manifest: {
         name: "Arr Digest",
         short_name: "Arr Digest",
@@ -18,7 +18,13 @@ export default defineConfig({
         display: "standalone",
         background_color: "#020617",
         theme_color: "#020617",
-        icons: [{ src: "favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }],
+        // PNGs too: iOS and some Android launchers ignore SVG icons. The
+        // 512px one is also the Unraid template icon.
+        icons: [
+          { src: "favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+          { src: "icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+        ],
       },
       workbox: {
         // This app is a live dashboard (WebSocket + polling API) — caching

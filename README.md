@@ -55,46 +55,55 @@ built.
 
 ## Running in Docker
 
+Images are published to GitHub Container Registry for amd64 and arm64:
+
+| Tag | What it is |
+|-----|------------|
+| `ghcr.io/ethanetxyz/arr-digest:latest` | Latest release |
+| `…:1`, `…:1.0`, `…:1.0.0` | Pinned to a major / minor / exact release |
+| `…:edge` | Latest commit on `main` — may be unstable |
+
+With Docker Compose, using [docker-compose.yml](docker-compose.yml) from
+this repo:
+
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-This builds the image and starts it on port `8080`, persisting the SQLite
-database in `./data`.
+Or with plain Docker:
 
-This isn't published to a registry (Docker Hub, GHCR, etc.) — it's built
-locally wherever you run it, including on Unraid itself (below).
+```bash
+docker run -d --name arr-digest --restart unless-stopped \
+  -p 8080:8080 -v "$PWD/data:/app/data" \
+  ghcr.io/ethanetxyz/arr-digest:latest
+```
+
+Either way it listens on port `8080` and keeps its SQLite database in
+`./data`. To build the image yourself instead, see the comment in
+`docker-compose.yml`.
 
 ## Running on Unraid
 
-The image is built directly on the Unraid box; nothing is pulled from a
-registry.
-
-1. **Build the image on Unraid.** Open a terminal on Unraid (SSH or the
-   built-in Web Terminal) and run:
+1. **Add the template.** Open a terminal on Unraid (the Web Terminal in the
+   top bar, or SSH) and run:
 
    ```bash
-   cd /mnt/user/appdata
-   git clone https://github.com/EthanetXYZ/arr-digest.git
-   cd arr-digest
-   docker build -t arr-digest:latest .
+   wget -O /boot/config/plugins/dockerMan/templates-user/my-arr-digest.xml \
+     https://raw.githubusercontent.com/EthanetXYZ/arr-digest/main/my-arr-digest.xml
    ```
 
-   Re-run the `git pull` + `docker build` there whenever you want to update.
-
-2. **Add the template.** Copy [my-arr-digest.xml](my-arr-digest.xml) to
-   `/boot/config/plugins/dockerMan/templates-user/` on the flash share (via
-   the `flash` share or the same terminal). The `my-` prefix matters — it's
-   the naming convention Unraid's template scanner expects; a file without
-   it won't show up in the dropdown. It then appears next time you open
-   **Docker tab → Add Container → Template**.
+2. Go to **Docker → Add Container**, and pick **arr-digest** from the
+   **Template** dropdown.
 3. Check the **Data** path (defaults to `/mnt/user/appdata/arr-digest`) and
-   **WebUI Port** (defaults to `8080`), then **Apply**. Since the image only
-   exists locally, leave auto-update checking off for this container —
-   there's nothing to pull.
-4. Open the container's WebUI and continue with **Setup** below. Use your
-   Unraid server's LAN IP as the **Public URL** in Settings so the webhook
-   URLs Sonarr/Radarr get are correct (see below).
+   **WebUI Port** (defaults to `8080`), then **Apply**. Unraid pulls the
+   image and starts it.
+4. Open the container's WebUI, create your login, and continue with
+   **Setup** below. Use your Unraid server's LAN IP as the **Public URL** in
+   Settings so the webhook URLs Sonarr/Radarr get are correct.
+
+Updates then work like any other container: when a new release is out,
+the Docker tab shows **update ready** — click it and choose **apply
+update**.
 
 Environment variables (all optional):
 
