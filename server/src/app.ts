@@ -1,5 +1,5 @@
 import path from "node:path";
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import { webhookRoutes } from "./webhooks/routes.js";
@@ -11,8 +11,34 @@ import { registerClient } from "./realtime/ws.js";
 import { registerAuth } from "./auth/routes.js";
 import { getPendingDigestEvents } from "./webhooks/events-service.js";
 
-export async function buildApp({ logger = true }: { logger?: boolean } = {}) {
-  const app = Fastify({ logger });
+// Query parameters that act as credentials: the Sonarr/Radarr webhook token
+// and the live feed's WebSocket ticket. Kept out of the logs so `docker
+// logs` output can be shared (e.g. in a bug report) without leaking them.
+const SECRET_QUERY_PARAMS = /([?&](?:token|ticket)=)[^&#]*/gi;
+
+export function redactUrl(url: string): string {
+  return url.replace(SECRET_QUERY_PARAMS, "$1[redacted]");
+}
+
+export async function buildApp({
+  logger = true,
+  logStream,
+}: { logger?: boolean; logStream?: NodeJS.WritableStream } = {}) {
+  const app = Fastify({
+    logger: logger && {
+      ...(logStream ? { stream: logStream } : {}),
+      serializers: {
+        // Same fields as Fastify's default request serializer, minus secrets.
+        req: (req: FastifyRequest) => ({
+          method: req.method,
+          url: redactUrl(req.url),
+          host: req.host,
+          remoteAddress: req.ip,
+          remotePort: req.socket?.remotePort,
+        }),
+      },
+    },
+  });
 
   await app.register(fastifyWebsocket);
   registerAuth(app);

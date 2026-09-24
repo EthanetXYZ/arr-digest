@@ -213,7 +213,8 @@ Not behind the login:
 
 - `/api/webhooks/sonarr` and `/api/webhooks/radarr` — Sonarr/Radarr can't
   log in, so these check the random token in the URL instead. Treat those
-  URLs like a password.
+  URLs like a password. The token is masked in the server's logs, so
+  `docker logs` output is safe to share.
 - `/api/health` — for Docker's health check; reports only status and
   version.
 
