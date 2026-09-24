@@ -3,7 +3,9 @@ const REPO_URL = "https://github.com/EthanetXYZ/arr-digest";
 export function Footer() {
   return (
     <footer
-      className="mt-auto border-t border-slate-900 px-4 pt-5 text-center text-xs text-slate-600"
+      // A centred flex row, so the icon link and the plain-text pieces all
+      // align on their middles (inline, the icon link sat higher).
+      className="mt-auto flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-slate-900 px-4 pt-5 text-xs leading-none text-slate-600"
       // Settings' fixed save bar sets --save-bar-space so the footer can
       // clear it instead of sitting underneath.
       style={{ paddingBottom: "calc(1.25rem + var(--save-bar-space, 0px))" }}
@@ -19,9 +21,7 @@ export function Footer() {
         </svg>
         Arr Digest on GitHub
       </a>
-      <span className="mx-2" aria-hidden>
-        ·
-      </span>
+      <span aria-hidden>·</span>
       <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer" className="hover:text-slate-300">
         Report an issue
       </a>
