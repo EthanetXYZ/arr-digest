@@ -12,6 +12,9 @@ import {
   createDestination,
   deleteDestination,
   listDestinations,
+  scheduleByTime,
+  updateDestination,
+  validateDestination,
   type DestinationInput,
 } from "./destinations.js";
 import { runDigest } from "./service.js";
@@ -45,6 +48,7 @@ function dest(name: string, url: string, p: Partial<DestinationInput> = {}) {
     includeMovies: true,
     includeSeries: true,
     mentionContent: null,
+    digestTimes: null,
     ...p,
   });
 }
@@ -66,6 +70,11 @@ function event(p: Partial<NormalizedEvent>) {
     occurredAt: Date.now(),
     ...p,
   });
+}
+
+function inputOf(d: ReturnType<typeof dest>): DestinationInput {
+  const { id: _id, createdAt: _c, watermark: _w, digestTimes, ...rest } = d;
+  return { ...rest, mode: rest.mode as DestinationInput["mode"], digestTimes: digestTimes ? JSON.parse(digestTimes) : null };
 }
 
 // What a real webhook does: store the event, then hand it to instant delivery.
@@ -135,16 +144,41 @@ describe("scheduled digest", () => {
     assert.equal(discord.to("pinged")[0].body.content, "<@&42> **Library Digest**");
   });
 
-  it("on partial failure, marks items sent (no duplicates to working channels) and reports the broken one", async () => {
+  it("on partial failure, retries only the broken destination — the working one gets no duplicates", async () => {
+    dest("good", discord.url("good"));
+    const broken = dest("broken", UNREACHABLE_URL);
+    event({});
+
+    const first = await runDigest();
+    assert.match(first.warning ?? "", /broken/);
+    assert.equal(discord.to("good").length, 1);
+    // Still queued: "broken" hasn't received it yet.
+    assert.equal(getPendingDigestEvents().length, 1);
+
+    // "good" has nothing new, so the only send attempted is the retry — which
+    // fails again, so this run as a whole failed.
+    await assert.rejects(runDigest(), /broken/);
+    assert.equal(discord.to("good").length, 1, "no duplicate to the working channel");
+
+    // Fixing (here: disabling) the broken destination releases the item.
+    updateDestination(broken.id, { ...inputOf(broken), enabled: false });
+    await runDigest();
+    assert.equal(getPendingDigestEvents().length, 0);
+    assert.equal(discord.to("good").length, 1);
+  });
+
+  it("gives each run its own history row per destination", async () => {
     dest("good", discord.url("good"));
     dest("broken", UNREACHABLE_URL);
     event({});
-
-    const result = await runDigest();
-    assert.match(result.warning ?? "", /broken/);
-    assert.equal(discord.to("good").length, 1);
-    assert.equal(getPendingDigestEvents().length, 0);
-    assert.equal(lastRun()?.status, "error");
+    await runDigest();
+    const rows = sqlite
+      .prepare("SELECT status, destination_name AS name FROM digest_runs ORDER BY id")
+      .all() as { status: string; name: string }[];
+    assert.deepEqual(rows, [
+      { status: "sent", name: "good" },
+      { status: "error", name: "broken" },
+    ]);
   });
 
   it("on total failure, keeps items queued so the next run retries them", async () => {
@@ -175,6 +209,82 @@ describe("scheduled digest", () => {
     assert.equal(discord.to("instant").length, 0);
     assert.equal(getPendingDigestEvents().length, 0);
     assert.equal(lastRun()?.status, "skipped_empty");
+  });
+});
+
+describe("per-destination schedules", () => {
+  it("sends each destination its items on its own run, once, and releases them after the last", async () => {
+    const morning = dest("morning", discord.url("morning"), { digestTimes: ["09:00"] });
+    const evening = dest("evening", discord.url("evening"));
+    const e = event({ title: "Split Film" });
+
+    await runDigest([morning.id]);
+    assert.equal(discord.to("morning").length, 1);
+    assert.equal(discord.to("evening").length, 0);
+    assert.ok(getPendingDigestEvents().some((p) => p.id === e.id), "evening still needs it");
+
+    await runDigest([morning.id]);
+    assert.equal(discord.to("morning").length, 1, "no repeat for morning");
+
+    await runDigest([evening.id]);
+    assert.match(allText("evening"), /Split Film/);
+    assert.equal(getPendingDigestEvents().length, 0);
+  });
+
+  it("groups destinations into one job per time, main-schedule destinations at every main time", () => {
+    const main = dest("main", discord.url("x"));
+    const custom = dest("custom", discord.url("x"), { digestTimes: ["07:30", "20:00"] });
+    dest("disabled", discord.url("x"), { enabled: false, digestTimes: ["06:00"] });
+    dest("instant", discord.url("x"), { mode: "instant", digestTimes: ["05:00"] });
+
+    const byTime = scheduleByTime(listDestinations(), ["09:00", "20:00"]);
+    assert.deepEqual(Object.fromEntries(byTime), {
+      "09:00": [main.id],
+      "20:00": [main.id, custom.id],
+      "07:30": [custom.id],
+    });
+  });
+
+  it("keeps main times scheduled even with no destinations on them", () => {
+    dest("custom", discord.url("x"), { digestTimes: ["07:30"] });
+    assert.deepEqual(scheduleByTime(listDestinations(), ["09:00"]).get("09:00"), []);
+  });
+
+  it("rejects an empty or malformed custom schedule", () => {
+    const base = inputOf(dest("x", discord.url("x")));
+    assert.match(validateDestination({ ...base, digestTimes: [] }) ?? "", /at least one/);
+    assert.match(validateDestination({ ...base, digestTimes: ["9am"] }) ?? "", /HH:mm/);
+    assert.match(validateDestination({ ...base, digestTimes: ["24:00"] }) ?? "", /HH:mm/);
+    assert.equal(validateDestination({ ...base, digestTimes: ["23:59"] }), null);
+  });
+
+  it("gives a new destination what's currently queued, but none of the already-sent history", async () => {
+    dest("old", discord.url("old"));
+    event({ title: "Already Sent" });
+    await runDigest();
+    event({ title: "Still Queued" });
+    // "old" hasn't run since, so "Still Queued" is pending.
+    const fresh = dest("fresh", discord.url("fresh"));
+    await runDigest([fresh.id]);
+    assert.match(allText("fresh"), /Still Queued/);
+    assert.doesNotMatch(allText("fresh"), /Already Sent/);
+  });
+
+  it("upgrading an existing database starts each destination at the oldest queued item", () => {
+    // Recreate the pre-watermark schema: a destination plus one sent and two
+    // queued events, then drop the column and re-run the startup migration.
+    const d = dest("existing", discord.url("x"));
+    const sent = event({ title: "Sent" });
+    const queued = event({ title: "Queued" });
+    event({ title: "Queued 2" });
+    sqlite.prepare("UPDATE media_events SET digested = 1 WHERE id = ?").run(sent.id);
+    sqlite.exec("ALTER TABLE destinations DROP COLUMN watermark");
+
+    bootstrapDb();
+    const row = sqlite.prepare("SELECT watermark FROM destinations WHERE id = ?").get(d.id) as {
+      watermark: number;
+    };
+    assert.equal(row.watermark, queued.id - 1);
   });
 });
 

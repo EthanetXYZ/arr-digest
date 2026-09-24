@@ -317,6 +317,7 @@ export function Settings() {
           destinations={destinations}
           onChange={setDestinations}
           formatOverrides={formatOverrides}
+          mainTimes={settings.digestTimes}
         />
       )}
 
@@ -324,12 +325,16 @@ export function Settings() {
       <section className="mb-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
         <h2 className="mb-3 text-lg font-semibold text-white">Schedule</h2>
         <Toggle
-          label="Enable scheduled digest"
+          label="Enable scheduled digests"
+          hint="Master switch — also pauses destinations with their own custom times"
           checked={settings.digestEnabled}
           onChange={(v) => patch({ digestEnabled: v })}
         />
 
-        <div className="mb-1 mt-2 text-sm font-medium text-slate-200">Send times</div>
+        <div className="mt-2 text-sm font-medium text-slate-200">Main send times</div>
+        <p className="mb-1.5 text-xs text-slate-500">
+          Used by every digest destination unless it sets its own times on the Destinations tab.
+        </p>
         <div className="flex flex-wrap gap-2">
           {settings.digestTimes.map((t, i) => (
             <div key={i} className="flex items-center gap-1">
@@ -482,10 +487,10 @@ export function Settings() {
                   }
                 >
                   {run.status === "sent"
-                    ? `Sent (${run.eventCount})`
+                    ? `Sent${run.destinationName ? ` to ${run.destinationName}` : ""} (${run.eventCount})`
                     : run.status === "skipped_empty"
                       ? "Skipped (nothing to report)"
-                      : `Error: ${run.error}`}
+                      : `Error${run.destinationName ? ` (${run.destinationName})` : ""}: ${run.error}`}
                 </span>
               </li>
             ))}

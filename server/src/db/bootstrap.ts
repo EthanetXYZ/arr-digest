@@ -50,7 +50,8 @@ export function bootstrapDb() {
       ran_at INTEGER NOT NULL,
       event_count INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL,
-      error TEXT
+      error TEXT,
+      destination_name TEXT
     );
 
     CREATE TABLE IF NOT EXISTS destinations (
@@ -65,21 +66,23 @@ export function bootstrapDb() {
       include_movies INTEGER NOT NULL DEFAULT 1,
       include_series INTEGER NOT NULL DEFAULT 1,
       mention_content TEXT,
+      digest_times TEXT,
+      watermark INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL
     );
   `);
 
-  // Existing databases predate the public_url column; CREATE TABLE IF NOT
-  // EXISTS above only applies to fresh installs, so add it here too.
-  const columns = sqlite.prepare("PRAGMA table_info(settings)").all() as { name: string }[];
-  if (!columns.some((c) => c.name === "public_url")) {
-    sqlite.exec("ALTER TABLE settings ADD COLUMN public_url TEXT");
-  }
-
-  // Same story for destinations.mode, added after the destinations table.
-  const destColumns = sqlite.prepare("PRAGMA table_info(destinations)").all() as { name: string }[];
-  if (!destColumns.some((c) => c.name === "mode")) {
-    sqlite.exec("ALTER TABLE destinations ADD COLUMN mode TEXT NOT NULL DEFAULT 'digest'");
+  // CREATE TABLE IF NOT EXISTS above only shapes fresh installs; columns
+  // added in later versions have to be added to existing databases here.
+  addColumnIfMissing("settings", "public_url", "TEXT");
+  addColumnIfMissing("destinations", "mode", "TEXT NOT NULL DEFAULT 'digest'");
+  addColumnIfMissing("destinations", "digest_times", "TEXT");
+  addColumnIfMissing("digest_runs", "destination_name", "TEXT");
+  if (addColumnIfMissing("destinations", "watermark", "INTEGER NOT NULL DEFAULT 0")) {
+    // Existing destinations start just below the oldest still-queued item,
+    // so what's waiting still goes out — rather than 0, which would make
+    // them re-send already-digested history.
+    sqlite.exec(`UPDATE destinations SET watermark = (${INITIAL_WATERMARK_SQL})`);
   }
 
   const row = sqlite.prepare("SELECT id FROM settings WHERE id = 1").get();
@@ -98,9 +101,26 @@ export function bootstrapDb() {
   if (legacy.url?.trim()) {
     sqlite
       .prepare(
-        "INSERT INTO destinations (name, webhook_url, mention_content, created_at) VALUES ('Main', ?, ?, ?)",
+        `INSERT INTO destinations (name, webhook_url, mention_content, watermark, created_at)
+         VALUES ('Main', ?, ?, (${INITIAL_WATERMARK_SQL}), ?)`,
       )
       .run(legacy.url.trim(), legacy.mention, Date.now());
     sqlite.exec("UPDATE settings SET discord_webhook_url = NULL, mention_content = NULL WHERE id = 1");
   }
+}
+
+// Where a new destination starts: just below the oldest item still queued,
+// so it picks up what's currently waiting but none of the already-sent
+// history. With nothing queued, at the newest event.
+export const INITIAL_WATERMARK_SQL = `COALESCE(
+  (SELECT MIN(id) - 1 FROM media_events WHERE digested = 0),
+  (SELECT MAX(id) FROM media_events),
+  0)`;
+
+// Returns true if the column was added (i.e. this database predates it).
+function addColumnIfMissing(table: string, column: string, definition: string): boolean {
+  const columns = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (columns.some((c) => c.name === column)) return false;
+  sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  return true;
 }

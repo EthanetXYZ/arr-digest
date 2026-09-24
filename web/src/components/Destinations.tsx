@@ -13,7 +13,82 @@ const EMPTY: DestinationInput = {
   includeMovies: true,
   includeSeries: true,
   mentionContent: null,
+  digestTimes: null,
 };
+
+function ScheduleControl({
+  times,
+  mainTimes,
+  onChange,
+}: {
+  times: string[] | null;
+  mainTimes: string[];
+  onChange: (next: string[] | null) => void;
+}) {
+  const custom = times !== null;
+  const mainLabel = mainTimes.length > 0 ? mainTimes.join(", ") : "no times set";
+
+  return (
+    <div className="mb-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-slate-500">Schedule:</span>
+        <div className="inline-flex rounded-md border border-slate-800 p-0.5">
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className={`rounded px-2.5 py-0.5 text-xs font-medium transition ${
+              !custom ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            Main schedule
+          </button>
+          <button
+            type="button"
+            onClick={() => !custom && onChange(mainTimes.length > 0 ? [...mainTimes] : ["09:00"])}
+            className={`rounded px-2.5 py-0.5 text-xs font-medium transition ${
+              custom ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            Custom
+          </button>
+        </div>
+        {!custom && <span className="text-xs text-slate-500">Follows the Schedule tab ({mainLabel}).</span>}
+      </div>
+
+      {custom && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {times.map((t, i) => (
+            <div key={i} className="flex items-center">
+              <input
+                type="time"
+                value={t}
+                onChange={(e) => onChange(times.map((x, idx) => (idx === i ? e.target.value : x)))}
+                className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-xs text-slate-200"
+              />
+              {times.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => onChange(times.filter((_, idx) => idx !== i))}
+                  className="px-1.5 text-xs text-slate-500 hover:text-removal"
+                  title="Remove time"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => onChange([...times, "09:00"])}
+            className="rounded-md border border-dashed border-slate-700 px-2 py-0.5 text-xs text-slate-400 hover:text-slate-200"
+          >
+            + Add time
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function toInput(d: Destination): DestinationInput {
   const { id: _id, createdAt: _createdAt, ...input } = d;
@@ -47,11 +122,13 @@ function Chip({
 function DestinationCard({
   saved,
   formatOverrides,
+  mainTimes,
   onSaved,
   onDeleted,
 }: {
   saved: Destination | null;
   formatOverrides: PreviewOverrides;
+  mainTimes: string[];
   onSaved: (d: Destination) => void;
   onDeleted: () => void;
 }) {
@@ -163,12 +240,20 @@ function DestinationCard({
             </button>
           ))}
         </div>
-        <span className="text-xs text-slate-500">
-          {draft.mode === "digest"
-            ? "Sent at the digest times on the Schedule tab."
-            : "Sent ~20s after events arrive, so a season drop still lands as one message."}
-        </span>
+        {draft.mode === "instant" && (
+          <span className="text-xs text-slate-500">
+            Sent ~20s after events arrive, so a season drop still lands as one message.
+          </span>
+        )}
       </div>
+
+      {draft.mode === "digest" && (
+        <ScheduleControl
+          times={draft.digestTimes}
+          mainTimes={mainTimes}
+          onChange={(digestTimes) => patch({ digestTimes })}
+        />
+      )}
 
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <span className="mr-1 text-xs text-slate-500">Events:</span>
@@ -251,10 +336,12 @@ export function Destinations({
   destinations,
   onChange,
   formatOverrides,
+  mainTimes,
 }: {
   destinations: Destination[];
   onChange: (next: Destination[]) => void;
   formatOverrides: PreviewOverrides;
+  mainTimes: string[];
 }) {
   const [drafts, setDrafts] = useState<number[]>([]);
   const [nextDraftKey, setNextDraftKey] = useState(0);
@@ -282,6 +369,7 @@ export function Destinations({
             key={d.id}
             saved={d}
             formatOverrides={formatOverrides}
+            mainTimes={mainTimes}
             onSaved={(updated) => onChange(destinations.map((x) => (x.id === updated.id ? updated : x)))}
             onDeleted={() => onChange(destinations.filter((x) => x.id !== d.id))}
           />
@@ -291,6 +379,7 @@ export function Destinations({
             key={`draft-${key}`}
             saved={null}
             formatOverrides={formatOverrides}
+            mainTimes={mainTimes}
             onSaved={(created) => {
               setDrafts((ds) => ds.filter((k) => k !== key));
               onChange([...destinations, created]);

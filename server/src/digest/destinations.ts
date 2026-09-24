@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { destinations } from "../db/schema.js";
+import { INITIAL_WATERMARK_SQL } from "../db/bootstrap.js";
 import { getSettings, type Settings } from "../config/settings.js";
 import type { DigestEvent } from "./builder.js";
 
@@ -18,6 +19,48 @@ export interface DestinationInput {
   includeMovies: boolean;
   includeSeries: boolean;
   mentionContent: string | null;
+  // null = follow the main schedule
+  digestTimes: string[] | null;
+}
+
+// The API shape: schedule parsed, internal bookkeeping (watermark) left out.
+export function toApi(d: Destination) {
+  const { watermark: _watermark, digestTimes, ...rest } = d;
+  return { ...rest, digestTimes: parseTimes(digestTimes) };
+}
+
+function parseTimes(raw: string | null): string[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// Digest destinations to run at each time of day: every destination on the
+// main schedule at each main time, plus each custom time. Main times are
+// always present (possibly with no destinations) so a run still happens to
+// clear items no digest destination wants.
+export function scheduleByTime(all: Destination[], mainTimes: string[]): Map<string, number[]> {
+  const byTime = new Map<string, number[]>(mainTimes.map((t) => [t, []]));
+  for (const d of all) {
+    if (!d.enabled || d.mode !== "digest") continue;
+    for (const t of parseTimes(d.digestTimes) ?? mainTimes) {
+      byTime.set(t, [...(byTime.get(t) ?? []), d.id]);
+    }
+  }
+  return byTime;
+}
+
+export function advanceWatermark(id: number, to: number) {
+  db.update(destinations)
+    .set({ watermark: sql`MAX(${destinations.watermark}, ${to})` })
+    .where(eq(destinations.id, id))
+    .run();
 }
 
 export function eventMatchesDestination(e: DigestEvent, d: Destination): boolean {
@@ -62,6 +105,12 @@ export function validateDestination(input: Partial<DestinationInput>): string | 
   } catch {
     return "Webhook URL isn't a valid URL";
   }
+  if (input.digestTimes != null) {
+    if (!Array.isArray(input.digestTimes) || input.digestTimes.length === 0) {
+      return "Add at least one send time, or use the main schedule";
+    }
+    if (!input.digestTimes.every((t) => TIME_RE.test(t))) return "Send times must be HH:mm";
+  }
   return null;
 }
 
@@ -77,6 +126,7 @@ function normalize(input: DestinationInput) {
     includeMovies: input.includeMovies,
     includeSeries: input.includeSeries,
     mentionContent: input.mentionContent?.trim() || null,
+    digestTimes: input.digestTimes ? JSON.stringify([...new Set(input.digestTimes)].sort()) : null,
   };
 }
 
@@ -91,7 +141,7 @@ export function getDestination(id: number): Destination | undefined {
 export function createDestination(input: DestinationInput): Destination {
   return db
     .insert(destinations)
-    .values({ ...normalize(input), createdAt: Date.now() })
+    .values({ ...normalize(input), watermark: sql.raw(`(${INITIAL_WATERMARK_SQL})`), createdAt: Date.now() })
     .returning()
     .get();
 }

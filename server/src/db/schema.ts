@@ -58,6 +58,14 @@ export const destinations = sqliteTable("destinations", {
   includeMovies: integer("include_movies", { mode: "boolean" }).notNull().default(true),
   includeSeries: integer("include_series", { mode: "boolean" }).notNull().default(true),
   mentionContent: text("mention_content"),
+  // JSON array of "HH:mm" for digest destinations with their own schedule;
+  // null means "follow the main schedule".
+  digestTimes: text("digest_times"),
+  // Highest media_events.id this destination has handled. With per-
+  // destination schedules one event can go to channel A at 9am and B at 8pm,
+  // so each destination tracks its own progress; a failed send leaves it
+  // unmoved, and only that destination retries.
+  watermark: integer("watermark").notNull().default(0),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -67,4 +75,5 @@ export const digestRuns = sqliteTable("digest_runs", {
   eventCount: integer("event_count").notNull().default(0),
   status: text("status").notNull(), // "sent" | "skipped_empty" | "error"
   error: text("error"),
+  destinationName: text("destination_name"),
 });

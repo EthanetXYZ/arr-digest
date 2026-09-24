@@ -78,6 +78,8 @@ export interface DestinationInput {
   includeMovies: boolean;
   includeSeries: boolean;
   mentionContent: string | null;
+  // null = follow the main schedule
+  digestTimes: string[] | null;
 }
 
 export interface Destination extends DestinationInput {
@@ -91,6 +93,7 @@ export interface DigestRun {
   eventCount: number;
   status: "sent" | "skipped_empty" | "error";
   error: string | null;
+  destinationName: string | null;
 }
 
 export type WsMessage =

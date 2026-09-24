@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { mediaEvents } from "../db/schema.js";
 import { broadcast } from "../realtime/ws.js";
@@ -60,6 +60,11 @@ export function removePendingEvent(id: number): boolean {
     .where(and(eq(mediaEvents.id, id), eq(mediaEvents.digested, false)))
     .run();
   return result.changes > 0;
+}
+
+export function getMaxEventId(): number {
+  const row = db.select({ max: sql<number | null>`MAX(${mediaEvents.id})` }).from(mediaEvents).get();
+  return row?.max ?? 0;
 }
 
 export function existingEventIds(ids: number[]): Set<number> {

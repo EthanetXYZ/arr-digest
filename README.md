@@ -159,10 +159,18 @@ still lands as a single "S01E01–E10" message rather than ten. An event that
 only instant destinations want leaves the Live Feed once pushed, since it
 won't be in the next digest.
 
-If one destination fails during a digest but others succeed, the items
-still count as sent (so working channels don't get duplicates on the next
-run) and the failure shows as a banner on the Live Feed. If every
-destination fails, the items stay queued and are retried next time.
+A scheduled-digest destination follows the main send times (Schedule tab)
+unless you give it its own under **Schedule → Custom** — e.g. removals once
+in the morning, everything else in the evening. Custom times use the main
+timezone, and the **Enable scheduled digests** switch pauses them too.
+
+Each destination tracks what it has already received, so an item can go to
+one channel at 9am and another at 8pm. If a destination's send fails, only
+that destination retries it on its next run — the others never get
+duplicates — and the failure shows as a banner on the Live Feed. An item
+leaves the queue once every destination that wants it has received it, so
+a destination that stays broken holds its items until you fix or disable
+it.
 
 ### 4. Configure the schedule and display options
 
