@@ -32,7 +32,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (Array.isArray(body.digestTimes)) {
       const valid = body.digestTimes.every((t) => /^\d{2}:\d{2}$/.test(t));
       if (!valid) {
-        return reply.code(400).send({ error: "digestTimes must be HH:mm strings" });
+        return reply.code(400).send({ error: "every send time needs a time set (or remove it)" });
       }
       patch.digestTimes = JSON.stringify(body.digestTimes);
     }

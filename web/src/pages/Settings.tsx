@@ -163,10 +163,13 @@ export function Settings() {
   const selectTab = (tab: TabKey) => setSearchParams(tab === "all" ? {} : { tab }, { replace: true });
 
   const [settings, setSettings] = useState<SettingsType | null>(null);
+  // What the server last confirmed, to tell whether there's anything to save.
+  const [savedSettings, setSavedSettings] = useState<SettingsType | null>(null);
   const [history, setHistory] = useState<DigestRun[]>([]);
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [preview, setPreview] = useState<DiscordMessage[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [destinations, setDestinations] = useState<Destination[]>([]);
@@ -174,7 +177,10 @@ export function Settings() {
   const timezones = useTimezones();
 
   useEffect(() => {
-    api.getSettings().then(setSettings);
+    api.getSettings().then((s) => {
+      setSettings(s);
+      setSavedSettings(s);
+    });
     api.getDigestHistory().then(setHistory);
     api.getNetworkInfo().then(setNetworkInfo).catch(() => {});
     api.getDestinations().then(setDestinations).catch(() => {});
@@ -218,26 +224,49 @@ export function Settings() {
     destinations,
   ]);
 
-  if (!settings || !formatOverrides) {
-    return <div className="mx-auto max-w-2xl px-4 py-6 text-slate-400">Loading…</div>;
-  }
-
-  function patch(p: Partial<SettingsType>) {
-    setSettings((s) => (s ? { ...s, ...p } : s));
-  }
+  const dirty = !!settings && !!savedSettings && editableSnapshot(settings) !== editableSnapshot(savedSettings);
 
   async function save() {
     if (!settings) return;
     setSaving(true);
     setSaved(false);
+    setSaveError(null);
     try {
       const updated = await api.updateSettings(settings);
       setSettings(updated);
+      setSavedSettings(updated);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Couldn't save settings");
     } finally {
       setSaving(false);
     }
+  }
+
+  useUnsavedChangesGuard(dirty);
+
+  // Ctrl/Cmd+S saves, rather than the browser's "save page as".
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (dirty && !saving) saveRef.current();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dirty, saving]);
+
+  if (!settings || !formatOverrides) {
+    return <div className="mx-auto max-w-2xl px-4 py-6 text-slate-400">Loading…</div>;
+  }
+
+  function patch(p: Partial<SettingsType>) {
+    setSaveError(null);
+    setSettings((s) => (s ? { ...s, ...p } : s));
   }
 
   const origin = settings.publicUrl?.trim() || window.location.origin;
@@ -250,8 +279,10 @@ export function Settings() {
     (addr) => `${protocol}//${addr}${port ? `:${port}` : ""}`,
   );
 
+  const showSaveBar = TABS_WITH_SAVE.includes(activeTab) || dirty;
+
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-6">
+    <div className={`mx-auto max-w-2xl px-4 ${showSaveBar ? "pb-24" : "pb-6"}`}>
       <TabPills active={activeTab} onSelect={selectTab} />
 
       {show("connection") && (
@@ -457,19 +488,6 @@ export function Settings() {
       </section>
       )}
 
-      {TABS_WITH_SAVE.includes(activeTab) && (
-        <div className="mb-8 flex items-center gap-3">
-          <button
-            onClick={save}
-            disabled={saving}
-            className="rounded-md bg-upgrade px-4 py-2 text-sm font-medium text-white hover:bg-upgrade/80 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save settings"}
-          </button>
-          {saved && <span className="text-sm text-addition">Saved.</span>}
-        </div>
-      )}
-
       {show("security") && <SecuritySettings />}
 
       {show("history") && (
@@ -503,6 +521,136 @@ export function Settings() {
         )}
       </section>
       )}
+
+      {/* Always on tabs with page-level settings; on the others only while
+          there are unsaved edits, so switching tabs can't hide them. */}
+      {showSaveBar && (
+        <SaveBar
+          dirty={dirty}
+          saving={saving}
+          saved={saved}
+          error={saveError}
+          onSave={save}
+          onDiscard={() => {
+            setSaveError(null);
+            setSettings(savedSettings);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// The fields the "Save settings" button covers. Destinations and security
+// save on their own.
+function editableSnapshot(s: SettingsType): string {
+  return JSON.stringify([
+    s.publicUrl ?? null,
+    s.digestEnabled,
+    s.digestTimes,
+    s.timezone,
+    s.digestTitle,
+    s.groupByType,
+    s.compactMode,
+    s.showPoster,
+    s.skipIfEmpty,
+  ]);
+}
+
+const LEAVE_WARNING = "You have unsaved settings changes. Leave without saving?";
+
+// Warns before unsaved edits are lost: reloading or closing the tab (the
+// browser's own prompt), or clicking a link elsewhere in the app. BrowserRouter
+// has no navigation blocker, but React Router's <Link> skips navigating when
+// the click was already default-prevented, and a capture listener on the
+// document runs before React's handler on the root.
+function useUnsavedChangesGuard(dirty: boolean) {
+  useEffect(() => {
+    if (!dirty) return;
+
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+
+    function onClick(e: MouseEvent) {
+      const link = (e.target as Element | null)?.closest?.("a[href]");
+      if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const url = new URL((link as HTMLAnchorElement).href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+      if (!window.confirm(LEAVE_WARNING)) e.preventDefault();
+    }
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClick, true);
+    };
+  }, [dirty]);
+}
+
+function SaveBar({
+  dirty,
+  saving,
+  saved,
+  error,
+  onSave,
+  onDiscard,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  saved: boolean;
+  error: string | null;
+  onSave: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    // Fixed rather than sticky, so it sits at the bottom of the window even
+    // on short tabs (the page reserves room for it with bottom padding).
+    <div
+      className={`fixed inset-x-0 bottom-0 z-20 border-t backdrop-blur transition-colors ${
+        dirty ? "border-amber-400/40 bg-slate-900/95" : "border-slate-800 bg-slate-950/90"
+      }`}
+    >
+      <div
+        className="mx-auto flex max-w-2xl items-center gap-3 px-4 pt-3"
+        // Clears the home indicator when installed as an app on a phone.
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      >
+        <div role="status" className="min-w-0 flex-1 text-sm">
+          {error ? (
+            <span className="text-removal">Couldn't save: {error}</span>
+          ) : dirty ? (
+            <span className="flex items-center gap-2 font-medium text-amber-300">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-hidden />
+              <span className="sm:hidden">Unsaved changes</span>
+              <span className="hidden sm:inline">You have unsaved changes</span>
+            </span>
+          ) : saved ? (
+            <span className="text-addition">Settings saved</span>
+          ) : (
+            <span className="text-slate-500">No unsaved changes</span>
+          )}
+        </div>
+        {dirty && (
+          <button
+            onClick={onDiscard}
+            disabled={saving}
+            className="rounded-md px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-50"
+          >
+            Discard
+          </button>
+        )}
+        <button
+          onClick={onSave}
+          disabled={!dirty || saving}
+          title="Save (Ctrl+S)"
+          className="rounded-md bg-upgrade px-4 py-2 text-sm font-medium text-white shadow-sm shadow-upgrade/30 hover:bg-upgrade/80 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
+        >
+          {saving ? "Saving…" : "Save settings"}
+        </button>
+      </div>
     </div>
   );
 }
