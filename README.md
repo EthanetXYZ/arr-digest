@@ -13,6 +13,27 @@ The web UI is protected by a username and password you create on first
 launch (optionally skipped for devices on your home network). See
 [Security](#security).
 
+![Live Feed showing pending additions, upgrades and removals, with a season's episodes grouped into one item](docs/screenshots/live-feed.png)
+
+<table>
+  <tr>
+    <td width="40%" valign="top">
+      <img src="docs/screenshots/discord-preview.png" alt="Settings page showing a live preview of the Discord message">
+      <br><sub>Live preview of the Discord message as you change settings</sub>
+    </td>
+    <td width="34%" valign="top">
+      <img src="docs/screenshots/destinations.png" alt="Three Discord destinations, each with its own events, delivery mode and schedule">
+      <br><sub>Different events to different channels, scheduled or instant</sub>
+    </td>
+    <td width="26%" valign="top">
+      <img src="docs/screenshots/mobile.png" alt="The Live Feed on a phone">
+      <br><sub>Works on a phone, and installs as an app</sub>
+    </td>
+  </tr>
+</table>
+
+<sub>Screenshots use demo data.</sub>
+
 ## How it works
 
 - Sonarr/Radarr are configured with a **Webhook** connection pointing at this
